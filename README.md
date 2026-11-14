@@ -21,25 +21,15 @@ This is a working academic demo, not a production airline reservation platform. 
 
 Requirements: Java 21, Maven 3.9+, Node.js 22+, npm, and a MongoDB Atlas cluster. This project uses Atlas; it does not start a local MongoDB server.
 
-1. In MongoDB Atlas, create a database user and cluster, then copy the Java driver connection string. Replace the username/password/cluster placeholders in `MONGODB_URI`; URL-encode special characters in the password. Spring does not automatically load `.env` files, so export the URI in the first terminal or configure it in your IDE:
+1. In MongoDB Atlas, create a database user and cluster. You will need the Java driver connection string the first time you start the backend. The launcher prompts for it with hidden input, so it will not be echoed into the terminal.
+
+2. From the repository root, start the API and seed the airport catalog/demo schedules into empty Atlas collections:
 
    ```sh
-   export MONGODB_URI='mongodb+srv://<db-user>:<db-password>@<cluster-host>/jetsetgo?retryWrites=true&w=majority'
+   ./run-backend.sh
    ```
 
-2. From the repository root, start the API. To seed the airport catalog and four demo schedules into empty collections once, use:
-
-   ```sh
-   SEED_DEMO_DATA=true PAYMENT_MODE=DEMO mvn spring-boot:run
-   ```
-
-   Seeding is opt-in and never drops or replaces records. For an existing database, leave `SEED_DEMO_DATA` unset. After the sample data has been inserted once, stop the API with `Ctrl+C`, then restart without the flag:
-
-   ```sh
-   PAYMENT_MODE=DEMO mvn spring-boot:run
-   ```
-
-   The API is at `http://localhost:8080`; health check: `http://localhost:8080/api/health`. Add `DEMO_ADMIN_EMAIL` and `DEMO_ADMIN_PASSWORD` to the process environment before startup to create an admin login; use a strong unique password.
+   The prompt accepts your Atlas connection string without displaying it. Seeding only fills empty airport/flight collections; it does not drop or replace records. The API is at `http://localhost:8080`. Add `DEMO_ADMIN_EMAIL` and `DEMO_ADMIN_PASSWORD` to the process environment before startup to create an admin login; use a strong unique password.
 
    To use Razorpay **Test Mode** instead, set `PAYMENT_MODE=RAZORPAY_TEST`, `RAZORPAY_KEY_ID`, and `RAZORPAY_KEY_SECRET` on the backend only. Never use live credentials for this demo.
 
