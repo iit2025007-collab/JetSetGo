@@ -27,13 +27,15 @@ public class BookingService {
     private final FlightRepository flights;
     private final MongoTemplate mongo;
     private final RazorpayService razorpay;
+    private final DemoPaymentService demoPayments;
 
     public BookingService(BookingRepository bookings, FlightRepository flights,
-                         MongoTemplate mongo, RazorpayService razorpay) {
+                         MongoTemplate mongo, RazorpayService razorpay, DemoPaymentService demoPayments) {
         this.bookings = bookings;
         this.flights = flights;
         this.mongo = mongo;
         this.razorpay = razorpay;
+        this.demoPayments = demoPayments;
     }
 
     public Booking create(String userId, String idempotencyKey, CreateBooking request) {
@@ -105,7 +107,11 @@ public class BookingService {
         }
         if (originalStatus == BookingStatus.CONFIRMED) {
             try {
-                razorpay.refund(booking.razorpayPaymentId(), booking.amount(), booking.currency());
+                if (booking.razorpayPaymentId() != null) {
+                    razorpay.refund(booking.razorpayPaymentId(), booking.amount(), booking.currency());
+                } else {
+                    demoPayments.refund(booking.id());
+                }
             } catch (RuntimeException failure) {
                 mongo.updateFirst(Query.query(Criteria.where("_id").is(booking.id())
                                 .and("status").is(BookingStatus.CANCELLING)),

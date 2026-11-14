@@ -1,6 +1,6 @@
 package com.jetsetgo.web;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -35,8 +35,9 @@ public class FlightController {
     public List<Flight> search(@RequestParam(required = false) String from,
                                @RequestParam(required = false) String to,
                                @RequestParam(required = false)
-                               @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant after) {
-        return flights.search(from, to, after);
+                               @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                               @RequestParam(defaultValue = "departure") String sort) {
+        return flights.search(from, to, date, sort);
     }
 
     @GetMapping("/flights/{id}")

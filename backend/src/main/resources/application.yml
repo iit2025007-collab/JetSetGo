@@ -3,12 +3,13 @@ server:
 spring:
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/jetsetgo}
+      uri: ${MONGODB_URI}
       auto-index-creation: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
 app:
+  seed-demo-data: ${SEED_DEMO_DATA:false}
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-replace-this-before-deploying-jetsetgo-2026}
     expiration-hours: ${JWT_EXPIRATION_HOURS:24}
@@ -17,3 +18,5 @@ app:
 razorpay:
   key-id: ${RAZORPAY_KEY_ID:}
   key-secret: ${RAZORPAY_KEY_SECRET:}
+payment:
+  mode: ${PAYMENT_MODE:DEMO}

@@ -28,13 +28,15 @@ class FlightServiceTest {
         Flight delayed = flight("c", "DEL", "BLR", "DELAYED");
         when(repository.findAll()).thenReturn(List.of(delToBom, bomToBlr, delayed));
 
-        assertEquals(List.of(delToBom), service.search("DEL", null, null));
-        assertEquals(List.of(bomToBlr), service.search(null, "BLR", null));
+        assertEquals(List.of(delToBom), service.search("DEL", null, null, null));
+        assertEquals(List.of(bomToBlr), service.search(null, "BLR", null, null));
+        assertEquals(List.of(delToBom, bomToBlr), service.search(null, null,
+                java.time.LocalDate.of(2030, 1, 1), null));
     }
 
     private static Flight flight(String id, String origin, String destination, String status) {
         return new Flight(id, "Airline", id, origin, origin, destination, destination,
                 Instant.parse("2030-01-01T10:00:00Z"), Instant.parse("2030-01-01T12:00:00Z"),
-                new BigDecimal("1000"), "INR", 10, status);
+                new BigDecimal("1000"), "INR", 10, status, "DEMO");
     }
 }

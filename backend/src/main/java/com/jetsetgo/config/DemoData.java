@@ -11,12 +11,15 @@ import java.util.List;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.jetsetgo.domain.AppUser;
+import com.jetsetgo.domain.Airport;
 import com.jetsetgo.domain.Flight;
 import com.jetsetgo.domain.SeatInventory;
+import com.jetsetgo.repository.AirportRepository;
 import com.jetsetgo.repository.FlightRepository;
 import com.jetsetgo.repository.UserRepository;
 
@@ -24,15 +27,36 @@ import com.jetsetgo.repository.UserRepository;
 public class DemoData {
     @Bean
     ApplicationRunner seedFlights(FlightRepository flights, MongoTemplate mongo,
-                                  UserRepository users, PasswordEncoder passwords) {
+                                  AirportRepository airports, UserRepository users,
+                                  PasswordEncoder passwords,
+                                  @Value("${app.seed-demo-data:false}") boolean seedDemoData) {
         return args -> {
-            if (flights.count() == 0) {
+            if (seedDemoData && airports.count() == 0) {
+                airports.saveAll(List.of(
+                        airport("DEL", "Delhi", "Indira Gandhi International Airport", "India", "Asia/Kolkata"),
+                        airport("BOM", "Mumbai", "Chhatrapati Shivaji Maharaj International Airport", "India", "Asia/Kolkata"),
+                        airport("BLR", "Bengaluru", "Kempegowda International Airport", "India", "Asia/Kolkata"),
+                        airport("HYD", "Hyderabad", "Rajiv Gandhi International Airport", "India", "Asia/Kolkata"),
+                        airport("MAA", "Chennai", "Chennai International Airport", "India", "Asia/Kolkata"),
+                        airport("CCU", "Kolkata", "Netaji Subhas Chandra Bose International Airport", "India", "Asia/Kolkata"),
+                        airport("LKO", "Lucknow", "Chaudhary Charan Singh International Airport", "India", "Asia/Kolkata"),
+                        airport("PNQ", "Pune", "Pune Airport", "India", "Asia/Kolkata"),
+                        airport("DXB", "Dubai", "Dubai International Airport", "United Arab Emirates", "Asia/Dubai"),
+                        airport("SIN", "Singapore", "Singapore Changi Airport", "Singapore", "Asia/Singapore"),
+                        airport("LHR", "London", "Heathrow Airport", "United Kingdom", "Europe/London"),
+                        airport("LGW", "London", "Gatwick Airport", "United Kingdom", "Europe/London"),
+                        airport("JFK", "New York", "John F. Kennedy International Airport", "United States", "America/New_York"),
+                        airport("EWR", "New York", "Newark Liberty International Airport", "United States", "America/New_York"),
+                        airport("LGA", "New York", "LaGuardia Airport", "United States", "America/New_York")
+                ));
+            }
+            if (seedDemoData && flights.count() == 0) {
                 ZoneId zone = ZoneId.of("Asia/Kolkata");
                 LocalDate today = LocalDate.now(zone);
                 List<Flight> samples = List.of(
                         flight("air-india-101", "Air India", "AI 101", "DEL", "New Delhi", "BOM", "Mumbai",
                                 today.plusDays(2), LocalTime.of(9, 15), LocalTime.of(11, 25), "6499"),
-                        flight("vistara-204", "Vistara", "UK 204", "BOM", "Mumbai", "BLR", "Bengaluru",
+                        flight("indigo-204", "IndiGo", "6E 204", "BOM", "Mumbai", "BLR", "Bengaluru",
                                 today.plusDays(3), LocalTime.of(14, 0), LocalTime.of(15, 40), "5199"),
                         flight("indigo-611", "IndiGo", "6E 611", "BLR", "Bengaluru", "DEL", "New Delhi",
                                 today.plusDays(4), LocalTime.of(7, 30), LocalTime.of(10, 15), "7299"),
@@ -63,6 +87,10 @@ public class DemoData {
         };
     }
 
+    private static Airport airport(String code, String city, String name, String country, String timeZone) {
+        return new Airport(code, city, name, country, timeZone);
+    }
+
     private static Flight flight(String id, String airline, String number, String originCode,
                                  String origin, String destinationCode, String destination,
                                  LocalDate date, LocalTime departure, LocalTime arrival, String price) {
@@ -70,6 +98,6 @@ public class DemoData {
         Instant takeoff = date.atTime(departure).atZone(zone).toInstant();
         Instant landing = date.atTime(arrival).atZone(zone).toInstant();
         return new Flight(id, airline, number, originCode, origin, destinationCode, destination,
-                takeoff, landing, new BigDecimal(price), "INR", 48, "SCHEDULED");
+                takeoff, landing, new BigDecimal(price), "INR", 48, "SCHEDULED", "DEMO");
     }
 }

@@ -1,4 +1,4 @@
-import type { Booking, Flight, Order, Session } from "./types";
+import type { AdminSummary, Airport, Booking, DemoPaymentResult, Flight, Order, Session, UserSummary } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 const SESSION_KEY = "jetsetgo-session";
@@ -33,14 +33,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
   }
-  return response.json() as Promise<T>;
+  const body = await response.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }
 
 export const api = {
-  flights: (from?: string, to?: string) => {
+  airports: (query = "") => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    return request<Airport[]>(`/api/airports?${params}`);
+  },
+  flights: (from?: string, to?: string, date?: string, sort = "departure") => {
     const params = new URLSearchParams();
     if (from) params.set("from", from);
     if (to) params.set("to", to);
+    if (date) params.set("date", date);
+    if (sort) params.set("sort", sort);
     return request<Flight[]>(`/api/flights?${params}`);
   },
   flight: (id: string) => request<Flight>(`/api/flights/${id}`),
@@ -60,4 +68,20 @@ export const api = {
   order: (id: string) => request<Order>(`/api/bookings/${id}/payments/order`, { method: "POST" }),
   verifyPayment: (id: string, payload: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
     request<Booking>(`/api/bookings/${id}/payments/verify`, { method: "POST", body: JSON.stringify(payload) }),
+  demoPayment: (id: string, method: string, succeed: boolean, idempotencyKey: string) =>
+    request<DemoPaymentResult>(`/api/bookings/${id}/payments/demo/complete`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ method, succeed }),
+    }),
+  adminSummary: () => request<AdminSummary>("/api/admin/summary"),
+  adminFlights: () => request<Flight[]>("/api/admin/flights"),
+  adminBookings: () => request<Booking[]>("/api/admin/bookings"),
+  adminUsers: () => request<UserSummary[]>("/api/admin/users"),
+  createFlight: (flight: Record<string, unknown>) =>
+    request<Flight>("/api/admin/flights", { method: "POST", body: JSON.stringify(flight) }),
+  updateFlightStatus: (id: string, status: string) =>
+    request<Flight>(`/api/admin/flights/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  deleteFlight: (id: string) =>
+    request<void>(`/api/admin/flights/${id}`, { method: "DELETE" }),
 };

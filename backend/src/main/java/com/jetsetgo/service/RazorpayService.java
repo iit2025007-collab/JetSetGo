@@ -22,15 +22,18 @@ import org.springframework.web.server.ResponseStatusException;
 public class RazorpayService {
     private final String keyId;
     private final String keySecret;
+    private final String paymentMode;
     private final RestClient restClient;
     private final BookingRepository bookings;
 
     public RazorpayService(@Value("${razorpay.key-id}") String keyId,
                            @Value("${razorpay.key-secret}") String keySecret,
+                           @Value("${payment.mode:DEMO}") String paymentMode,
                            RestClient.Builder restClientBuilder,
                            BookingRepository bookings) {
         this.keyId = keyId;
         this.keySecret = keySecret;
+        this.paymentMode = paymentMode.toUpperCase();
         this.restClient = restClientBuilder.baseUrl("https://api.razorpay.com/v1").build();
         this.bookings = bookings;
     }
@@ -40,9 +43,22 @@ public class RazorpayService {
         if (booking.status() != BookingStatus.PENDING_PAYMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This booking is not awaiting payment");
         }
+        boolean demoMode = "DEMO".equals(paymentMode);
         if (booking.razorpayOrderId() != null) {
+            if (booking.razorpayOrderId().startsWith("demo_") != demoMode) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Payment mode changed after this booking was created");
+            }
             return new OrderResult(booking.razorpayOrderId(), keyId,
-                    booking.amount().movePointRight(2).longValueExact(), booking.currency());
+                    booking.amount().movePointRight(2).longValueExact(), booking.currency(), demoMode);
+        }
+        if (demoMode) {
+            Booking updated = bookings.save(booking.withPaymentOrder("demo_" + booking.id()));
+            return new OrderResult(updated.razorpayOrderId(), "", updated.amount().movePointRight(2).longValueExact(),
+                    updated.currency(), true);
+        }
+        if (!"RAZORPAY_TEST".equals(paymentMode)) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unknown payment mode configuration");
         }
         requireCredentials();
         try {
@@ -59,7 +75,7 @@ public class RazorpayService {
             }
             Booking updated = bookings.save(booking.withPaymentOrder(response.path("id").asText()));
             return new OrderResult(updated.razorpayOrderId(), keyId,
-                    updated.amount().movePointRight(2).longValueExact(), updated.currency());
+                    updated.amount().movePointRight(2).longValueExact(), updated.currency(), false);
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -69,6 +85,10 @@ public class RazorpayService {
 
     public Booking verify(String userId, String bookingId, String orderId, String paymentId, String signature) {
         Booking booking = ownedBooking(userId, bookingId);
+        if (!"RAZORPAY_TEST".equals(paymentMode)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Razorpay signature verification is available only in Razorpay Test Mode");
+        }
         if (booking.status() == BookingStatus.CONFIRMED && paymentId.equals(booking.razorpayPaymentId())) {
             return booking;
         }
@@ -146,5 +166,5 @@ public class RazorpayService {
         }
     }
 
-    public record OrderResult(String orderId, String keyId, long amount, String currency) {}
+    public record OrderResult(String orderId, String keyId, long amount, String currency, boolean demoMode) {}
 }

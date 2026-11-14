@@ -20,5 +20,6 @@ public record Flight(
         BigDecimal price,
         String currency,
         int capacity,
-        String status) {
+        String status,
+        String dataSource) {
 }
