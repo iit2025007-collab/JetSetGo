@@ -1,0 +1,55 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+
+package "Web / API" {
+  class AuthController
+  class FlightController
+  class BookingController
+  class PaymentController
+  class JwtAuthenticationFilter
+  class SecurityConfig
+}
+
+package "Use cases" {
+  class AuthService
+  class FlightService
+  class BookingService
+  class RazorpayService
+}
+
+package "Persistence (MongoDB)" {
+  interface UserRepository
+  interface FlightRepository
+  interface BookingRepository
+  interface SeatInventoryRepository
+  class AppUser
+  class Flight
+  class Booking
+  class SeatInventory
+}
+
+AuthController --> AuthService
+FlightController --> FlightService
+FlightController --> SeatInventoryRepository
+BookingController --> BookingService
+PaymentController --> RazorpayService
+AuthService --> UserRepository
+BookingService --> BookingRepository
+BookingService --> FlightRepository
+BookingService --> RazorpayService
+BookingService --> SeatInventory : atomic update via MongoTemplate
+RazorpayService --> BookingRepository
+UserRepository ..> AppUser
+FlightRepository ..> Flight
+BookingRepository ..> Booking
+SeatInventoryRepository ..> SeatInventory
+Booking --> Flight : flightId
+Booking --> AppUser : userId
+
+note right of BookingService
+Reserves seats with one atomic
+findAndModify update. An idempotency
+index protects repeat requests.
+end note
+@enduml

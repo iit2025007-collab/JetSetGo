@@ -1,0 +1,30 @@
+export type User = { id: string; name: string; email: string; role: "CUSTOMER" | "ADMIN" };
+export type Session = { token: string; user: User };
+export type Flight = {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  originCode: string;
+  originCity: string;
+  destinationCode: string;
+  destinationCity: string;
+  departure: string;
+  arrival: string;
+  price: number;
+  currency: string;
+  capacity: number;
+  status: string;
+};
+export type Booking = {
+  id: string;
+  pnr: string;
+  flightId: string;
+  seatNumber: string;
+  passengerName: string;
+  passengerEmail: string;
+  amount: number;
+  currency: string;
+  status: "PENDING_PAYMENT" | "CONFIRMED" | "CANCELLED";
+  createdAt: string;
+};
+export type Order = { orderId: string; keyId: string; amount: number; currency: string };

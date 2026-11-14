@@ -1,0 +1,25 @@
+@startuml
+actor Traveller
+participant "React app" as Web
+participant "Spring API" as API
+database MongoDB
+participant Razorpay
+
+Traveller -> Web: Search and select a flight / seat
+Web -> API: POST /api/bookings + Idempotency-Key
+API -> MongoDB: atomically reserve available seat
+API -> MongoDB: insert PENDING_PAYMENT booking
+API --> Web: booking + PNR
+Web -> API: POST /payments/order
+API -> Razorpay: create INR order (server credentials)
+Razorpay --> API: order_id
+API --> Web: checkout order + public key id
+Web -> Razorpay: Razorpay Checkout
+Razorpay --> Web: payment_id + signature
+Web -> API: POST /payments/verify
+API -> API: verify HMAC signature
+API -> Razorpay: fetch payment status / amount / currency
+Razorpay --> API: captured payment details
+API -> MongoDB: set booking CONFIRMED
+API --> Web: confirmed e-ticket / PNR
+@enduml

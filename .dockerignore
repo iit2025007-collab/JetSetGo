@@ -1,0 +1,8 @@
+.git
+.github
+frontend
+target
+node_modules
+.env
+.env.*
+!.env.example

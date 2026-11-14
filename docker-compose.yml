@@ -1,0 +1,11 @@
+services:
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - jetsetgo-mongo:/data/db
+
+volumes:
+  jetsetgo-mongo:
