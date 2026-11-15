@@ -60,17 +60,20 @@ public class FlightService {
         } else {
             results = flights.findAll();
         }
-        Comparator<Flight> order = switch (sort == null ? "departure" : sort.toLowerCase()) {
+        Comparator<Flight> order = switch (sort == null ? "departure" : sort.toLowerCase(Locale.ROOT)) {
             case "price" -> Comparator.comparing(Flight::price);
             case "duration" -> Comparator.comparing(flight ->
                     java.time.Duration.between(flight.departure(), flight.arrival()));
+            case "arrival" -> Comparator.comparing(Flight::arrival);
             default -> Comparator.comparing(Flight::departure);
         };
         ZoneId zone = timeZone(originAirport, results);
         Instant startOfDay = date == null ? null : date.atStartOfDay(zone).toInstant();
         Instant startOfNextDay = date == null ? null : date.plusDays(1).atStartOfDay(zone).toInstant();
         return results.stream()
-                .filter(flight -> "SCHEDULED".equals(flight.status()))
+                .filter(flight -> List.of("SCHEDULED", "DELAYED", "CANCELLED").contains(flight.status()))
+                .filter(flight -> !Boolean.TRUE.equals(flight.templateDisabled()))
+                .filter(flight -> flight.departure().isAfter(Instant.now()))
                 .filter(flight -> origin == null || origin.isBlank()
                         || flight.originCode().equalsIgnoreCase(origin.trim()))
                 .filter(flight -> destination == null || destination.isBlank()

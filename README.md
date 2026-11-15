@@ -95,9 +95,9 @@ mvn test
 cd frontend && npm ci && npm run build
 ```
 
-Focused backend tests cover payment-signature validation, demo payment success/failure, booking state transitions, and date/airport filters. The UML sources in [`docs/`](./docs) describe the implemented API/domain flow; render them with PlantUML to view the diagrams.
+Focused backend tests cover payment-signature validation, demo payment success/failure, booking state transitions, cabin seat allocation, recurring schedule timezones/stable IDs, and date/airport filters. The PlantUML sources in [`docs/`](./docs) cover the architecture, booking/payment flow, recurring schedule generation, and booking lifecycle. [`docs/oom-viva-notes.md`](./docs/oom-viva-notes.md) summarizes the object-oriented design decisions and sample viva answers. Render `.puml` files with PlantUML to view the diagrams.
 
-The layered monolith separates REST controllers, services/use cases, MongoDB repositories/documents, and security configuration. `Booking` has explicit lifecycle states; `BookingService` owns reservation/cancellation rules; `RazorpayService` isolates the external payment boundary. MongoDB repositories provide the persistence boundary, while a unique idempotency index and atomic seat update protect the critical booking path.
+The layered monolith separates REST controllers, services/use cases, MongoDB repositories/documents, and security configuration. `Booking` has explicit lifecycle states; `BookingService` owns reservation/cancellation rules; `FarePolicy` and `PaymentProcessor` expose replaceable strategies/boundaries; `FlightScheduleGenerator` separates recurring schedule generation from administration. MongoDB repositories provide the persistence boundary, while a unique idempotency index and atomic seat update protect the critical booking path.
 
 ## Deployment and safety notes
 

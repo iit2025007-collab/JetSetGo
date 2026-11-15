@@ -1,4 +1,4 @@
-import type { AdminSummary, Airport, Booking, DemoPaymentResult, Flight, Order, Session, UserSummary } from "./types";
+import type { AdminSummary, Airport, Booking, DemoPaymentResult, Flight, Order, RouteTemplate, Session, UserSummary } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 const SESSION_KEY = "jetsetgo-session";
@@ -56,7 +56,8 @@ export const api = {
     return request<Flight[]>(`/api/flights?${params}`);
   },
   flight: (id: string) => request<Flight>(`/api/flights/${id}`),
-  seats: (id: string) => request<string[]>(`/api/flights/${id}/seats`),
+  seats: (id: string, travelClass = "ECONOMY") =>
+    request<string[]>(`/api/flights/${id}/seats?travelClass=${encodeURIComponent(travelClass)}`),
   login: (email: string, password: string) =>
     request<Session>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (name: string, email: string, password: string) =>
@@ -89,11 +90,29 @@ export const api = {
       body: JSON.stringify({ method, succeed }),
     }),
   adminSummary: () => request<AdminSummary>("/api/admin/summary"),
-  adminFlights: () => request<Flight[]>("/api/admin/flights"),
-  adminBookings: () => request<Booking[]>("/api/admin/bookings"),
+  adminFlights: (filters: { from?: string; to?: string; date?: string; flightNumber?: string } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+    return request<Flight[]>(`/api/admin/flights?${params}`);
+  },
+  adminRoutes: () => request<RouteTemplate[]>("/api/admin/routes"),
+  createRoute: (route: Omit<RouteTemplate, "id" | "active">) =>
+    request<RouteTemplate>("/api/admin/routes", { method: "POST", body: JSON.stringify(route) }),
+  updateRoute: (id: string, route: Omit<RouteTemplate, "id" | "active">) =>
+    request<RouteTemplate>(`/api/admin/routes/${id}`, { method: "PUT", body: JSON.stringify(route) }),
+  setRouteActive: (id: string, active: boolean) =>
+    request<RouteTemplate>(`/api/admin/routes/${id}/active`, {
+      method: "PATCH", body: JSON.stringify({ active }),
+    }),
+  adminBookings: (status?: string) =>
+    request<Booking[]>(`/api/admin/bookings${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  cancelAdminBooking: (id: string) =>
+    request<Booking>(`/api/admin/bookings/${id}/cancel`, { method: "POST" }),
   adminUsers: () => request<UserSummary[]>("/api/admin/users"),
   createFlight: (flight: Record<string, unknown>) =>
     request<Flight>("/api/admin/flights", { method: "POST", body: JSON.stringify(flight) }),
+  updateFlight: (id: string, flight: Record<string, unknown>) =>
+    request<Flight>(`/api/admin/flights/${id}`, { method: "PUT", body: JSON.stringify(flight) }),
   updateFlightStatus: (id: string, status: string) =>
     request<Flight>(`/api/admin/flights/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   deleteFlight: (id: string) =>

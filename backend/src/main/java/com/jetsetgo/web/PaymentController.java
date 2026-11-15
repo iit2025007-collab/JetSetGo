@@ -12,30 +12,27 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.jetsetgo.service.RazorpayService;
-import com.jetsetgo.service.DemoPaymentService;
+import com.jetsetgo.service.PaymentProcessor;
 import com.jetsetgo.web.dto.BookingResponse;
 
 @RestController
 @RequestMapping("/api/bookings/{bookingId}/payments")
 public class PaymentController {
-    private final RazorpayService razorpay;
-    private final DemoPaymentService demoPayments;
+    private final PaymentProcessor payments;
 
-    public PaymentController(RazorpayService razorpay, DemoPaymentService demoPayments) {
-        this.razorpay = razorpay;
-        this.demoPayments = demoPayments;
+    public PaymentController(PaymentProcessor payments) {
+        this.payments = payments;
     }
 
     @PostMapping("/order")
-    public RazorpayService.OrderResult createOrder(Authentication authentication, @PathVariable String bookingId) {
-        return razorpay.createOrder(authentication.getName(), bookingId);
+    public PaymentProcessor.OrderResult createOrder(Authentication authentication, @PathVariable String bookingId) {
+        return payments.createOrder(authentication.getName(), bookingId);
     }
 
     @PostMapping("/verify")
     public BookingResponse verify(Authentication authentication, @PathVariable String bookingId,
                                   @Valid @RequestBody VerifyPaymentRequest request) {
-        return BookingResponse.from(razorpay.verify(authentication.getName(), bookingId,
+        return BookingResponse.from(payments.verify(authentication.getName(), bookingId,
                 request.razorpayOrderId(), request.razorpayPaymentId(), request.razorpaySignature()));
     }
 
@@ -43,7 +40,7 @@ public class PaymentController {
     public DemoPaymentResponse completeDemo(Authentication authentication, @PathVariable String bookingId,
                                              @RequestHeader("Idempotency-Key") @Size(min = 8, max = 100) String key,
                                              @Valid @RequestBody DemoPaymentRequest request) {
-        DemoPaymentService.PaymentResult result = demoPayments.complete(authentication.getName(), bookingId,
+        PaymentProcessor.DemoResult result = payments.completeDemo(authentication.getName(), bookingId,
                 key, request.method(), request.succeed());
         return new DemoPaymentResponse(BookingResponse.from(result.booking()), result.reference(), result.status());
     }

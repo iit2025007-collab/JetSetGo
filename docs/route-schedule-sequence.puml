@@ -1,0 +1,27 @@
+@startuml
+actor Administrator
+participant "AdminController" as Controller
+participant "RouteTemplateService" as Service
+participant "AirportRepository" as Airports
+participant "FlightScheduleGenerator" as Generator
+database MongoDB
+
+Administrator -> Controller: Create or update route template
+Controller -> Service: validate and save template
+Service -> Airports: verify both airport codes
+Airports --> Service: airport records
+Service -> MongoDB: upsert route template
+Service -> Generator: generateRollingWindow(today, 120)
+Generator -> MongoDB: read active templates
+Generator -> Generator: select operating dates\nand convert local times by IANA zones
+Generator -> MongoDB: unordered upsert by templateId:date\n(setOnInsert only)
+MongoDB --> Generator: write result
+Generator --> Service: generated candidates
+Service --> Controller: saved route template
+Controller --> Administrator: template response
+
+note over Generator,MongoDB
+Daily extension repeats the rolling-window generation.
+Existing flights are not overwritten or deleted.
+end note
+@enduml

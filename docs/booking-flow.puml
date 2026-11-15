@@ -17,9 +17,16 @@ API --> Web: checkout order + public key id
 Web -> Razorpay: Razorpay Checkout
 Razorpay --> Web: payment_id + signature
 Web -> API: POST /payments/verify
+API -> MongoDB: atomically transition PENDING_PAYMENT to PAYMENT_PROCESSING
 API -> API: verify HMAC signature
 API -> Razorpay: fetch payment status / amount / currency
 Razorpay --> API: captured payment details
 API -> MongoDB: set booking CONFIRMED
 API --> Web: confirmed e-ticket / PNR
+
+note over API,MongoDB
+The pending-to-processing transition includes
+an unexpired-hold condition. Expiry and payment
+verification cannot both win the transition.
+end note
 @enduml

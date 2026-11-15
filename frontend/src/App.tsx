@@ -7,7 +7,7 @@ import {
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, getSession, saveSession } from "./api";
 import AirportCombobox from "./components/AirportCombobox";
-import type { AdminSummary, Airport, Booking, Flight, Order, Session, UserSummary } from "./types";
+import type { AdminSummary, Airport, Booking, Flight, Order, RouteTemplate, Session, UserSummary } from "./types";
 
 declare global {
   interface Window {
@@ -36,6 +36,20 @@ const localDateInput = (offsetDays = 0) => {
   date.setDate(date.getDate() + offsetDays);
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
   return date.toISOString().slice(0, 10);
+};
+const toLocalDateTimeInput = (value: string) => {
+  const date = new Date(value);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+};
+const matchesTimeWindow = (flight: Flight, window: string) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: flight.originTimeZone ?? undefined,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(flight.departure));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  return window === "morning" ? hour < 12 : window === "afternoon" ? hour >= 12 && hour < 18 : hour >= 18;
 };
 
 export default function App() {
@@ -237,6 +251,8 @@ function FlightsPage() {
   const travelClass = (params.get("travelClass") ?? "ECONOMY").replace("_", " ");
   const airline = params.get("airline") ?? "";
   const maxPrice = params.get("maxPrice") ?? "";
+  const timeWindow = params.get("timeWindow") ?? "";
+  const maxDuration = params.get("maxDuration") ?? "";
   useEffect(() => {
     setLoading(true);
     api.flights(from, to, date, sort, mode, countryCode)
@@ -247,19 +263,36 @@ function FlightsPage() {
       }).catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
   }, [from, to, date, sort, mode, countryCode]);
   const visibleFlights = flights.filter((flight) =>
-    (!airline || flight.airline === airline) && (!maxPrice || flight.price <= Number(maxPrice)));
+    (!airline || flight.airline === airline)
+    && (!maxPrice || flight.price <= Number(maxPrice))
+    && (!maxDuration || (new Date(flight.arrival).getTime() - new Date(flight.departure).getTime()) / 60000 <= Number(maxDuration))
+    && (!timeWindow || matchesTimeWindow(flight, timeWindow)));
+  const dateStripStart = date || localDateInput();
   return (
     <section className="content-page">
       <div className="page-kicker"><span className="eyebrow-line" /> {mode ? `${mode.toUpperCase()} SEARCH` : "ALL ROUTES"} · DEMO SCHEDULES · NOT LIVE</div>
       <div className="page-heading-row"><div><h1>{from || to ? `${from || "Anywhere"} to ${to || "everywhere"}` : "Flights worth looking forward to."}</h1><p>{date ? `Sample flights for ${new Date(`${date}T12:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}.` : "Choose a flight and we’ll take it from here."} · {tripType === "ROUND_TRIP" && returnDate ? `Return ${returnDate} · ` : ""}{passengerCount} passenger{passengerCount === "1" ? "" : "s"} · {travelClass}.</p></div><div className="flight-tools">
-        <label className="sort-control">Sort by<select value={sort} onChange={(event) => { const next = new URLSearchParams(params); next.set("sort", event.target.value); setParams(next); }}><option value="departure">Earliest departure</option><option value="price">Lowest fare</option><option value="duration">Shortest duration</option></select></label>
+        <label className="sort-control">Sort by<select value={sort} onChange={(event) => { const next = new URLSearchParams(params); next.set("sort", event.target.value); setParams(next); }}><option value="departure">Earliest departure</option><option value="arrival">Earliest arrival</option><option value="price">Lowest fare</option><option value="duration">Shortest duration</option></select></label>
         <label className="sort-control">Airline<select value={airline} onChange={(event) => { const next = new URLSearchParams(params); event.target.value ? next.set("airline", event.target.value) : next.delete("airline"); setParams(next); }}><option value="">All airlines</option>{airlines.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label className="sort-control">Max fare<input aria-label="Maximum fare" type="number" min="0" placeholder="Any" value={maxPrice} onChange={(event) => { const next = new URLSearchParams(params); event.target.value ? next.set("maxPrice", event.target.value) : next.delete("maxPrice"); setParams(next); }} /></label>
+        <label className="sort-control">Departure time<select value={timeWindow} onChange={(event) => { const next = new URLSearchParams(params); event.target.value ? next.set("timeWindow", event.target.value) : next.delete("timeWindow"); setParams(next); }}><option value="">Any time</option><option value="morning">Morning · before noon</option><option value="afternoon">Afternoon · noon–6 PM</option><option value="evening">Evening · after 6 PM</option></select></label>
+        <label className="sort-control">Max duration<select value={maxDuration} onChange={(event) => { const next = new URLSearchParams(params); event.target.value ? next.set("maxDuration", event.target.value) : next.delete("maxDuration"); setParams(next); }}><option value="">Any duration</option><option value="180">3 hours</option><option value="360">6 hours</option><option value="600">10 hours</option></select></label>
         <Link to="/" className="outline-button">Edit search <ArrowUpRight size={15} /></Link>
       </div></div>
+      {from && to && <nav className="date-strip" aria-label="Nearby departure dates">
+        {Array.from({ length: 5 }, (_, index) => {
+          const optionDate = offsetDate(dateStripStart, index);
+          const next = new URLSearchParams(params);
+          next.set("date", optionDate);
+          return <Link key={optionDate} to={`/flights?${next.toString()}`} className={optionDate === dateStripStart ? "active" : ""}>
+            <small>{new Date(`${optionDate}T12:00:00`).toLocaleDateString("en-IN", { weekday: "short" })}</small>
+            <b>{new Date(`${optionDate}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</b>
+          </Link>;
+        })}
+      </nav>}
       {loading ? <Loading /> : error ? <ErrorNote message={error} /> : visibleFlights.length ? (
         <div className="flight-list">{visibleFlights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery={params.toString()} />)}</div>
-      ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No flights on this route yet"}</h3><p>{flights.length ? "Adjust the airline or maximum fare." : "Airports can still be searched even when no demo flights are available."}</p><Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
+      ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No flights on this route yet"}</h3><p>{flights.length ? "Adjust the airline, time, duration, or fare filters." : "Airport search is independent of flight availability. This route is not represented in the current demo schedule."}</p>{from && to && <Link className="text-link" to={`/flights?${new URLSearchParams({ from, to, date: offsetDate(dateStripStart, 1), mode, countryCode }).toString()}`}>Try the next day <ArrowRight size={16} /></Link>}<Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
     </section>
   );
 }
@@ -267,9 +300,9 @@ function FlightsPage() {
 function FlightCard({ flight, searchQuery }: { flight: Flight; searchQuery: string }) {
   return (
     <article className="flight-card">
-      <div className="airline-cell"><span className="airline-icon"><Plane size={17} /></span><span><b>{flight.airline}</b><small>{flight.flightNumber} · DEMO</small></span><span className="demo-tag">{flight.dataSource === "LIVE" ? "LIVE" : "DEMO"}</span></div>
-      <div className="route-cell"><div><b>{clock(flight.departure, flight.originTimeZone)}</b><span>{flight.originCode}</span></div><div className="route-line"><small>{day(flight.departure, flight.originTimeZone)}</small><span /><small>Direct</small></div><div className="route-destination"><b>{clock(flight.arrival, flight.destinationTimeZone)}</b><span>{flight.destinationCode}</span></div></div>
-      <div className="price-cell"><small>from / passenger</small><b>{money(flight.price, flight.currency)}</b><Link to={`/flight/${flight.id}${searchQuery ? `?${searchQuery}` : ""}`} className="choose-flight">Choose flight <ArrowRight size={15} /></Link></div>
+      <div className="airline-cell"><span className="airline-icon"><Plane size={17} /></span><span><b>{flight.airline}</b><small>{flight.flightNumber} · {flight.aircraft || "Aircraft not configured"}</small></span><span className={`status-pill status-${flight.status.toLowerCase()}`}>{flight.status} · DEMO</span></div>
+      <div className="route-cell"><div><b>{clock(flight.departure, flight.originTimeZone)}</b><span>{flight.originCode}</span></div><div className="route-line"><small>{day(flight.departure, flight.originTimeZone)}</small><span /><small>{Math.round((new Date(flight.arrival).getTime() - new Date(flight.departure).getTime()) / 60000)} min · Direct</small></div><div className="route-destination"><b>{clock(flight.arrival, flight.destinationTimeZone)}</b><span>{flight.destinationCode}</span></div></div>
+      <div className="price-cell"><small>{flight.status === "SCHEDULED" ? "demo fare / passenger" : "not bookable"}</small><b>{money(flight.price, flight.currency)}</b><Link to={`/flight/${flight.id}${searchQuery ? `?${searchQuery}` : ""}`} className="choose-flight">{flight.status === "SCHEDULED" ? "Choose flight" : "View status"} <ArrowRight size={15} /></Link></div>
     </article>
   );
 }
@@ -306,7 +339,7 @@ function FlightPage({ session }: { session: Session | null }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([api.flight(id), api.seats(id)])
+    Promise.all([api.flight(id), api.seats(id, travelClass)])
       .then(async ([nextFlight, nextSeats]) => {
         const nextReturnFlights = roundTrip && returnDate
           ? await api.flights(nextFlight.destinationCode, nextFlight.originCode, returnDate,
@@ -325,7 +358,7 @@ function FlightPage({ session }: { session: Session | null }) {
       .catch((e: Error) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [id, roundTrip, returnDate, mode, countryCode]);
+  }, [id, roundTrip, returnDate, mode, countryCode, travelClass]);
   useEffect(() => {
     if (!returnFlight) {
       setReturnSeats([]);
@@ -333,11 +366,11 @@ function FlightPage({ session }: { session: Session | null }) {
     }
     let active = true;
     setReturnSeats([]);
-    api.seats(returnFlight.id)
+    api.seats(returnFlight.id, travelClass)
       .then((available) => { if (active) setReturnSeats(available); })
       .catch((e: Error) => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [returnFlight?.id]);
+  }, [returnFlight?.id, travelClass]);
   useEffect(() => {
     setPassengers((current) => Array.from({ length: passengerCount }, (_, index) => current[index] ?? {
       name: "", nationality: "", passportExpiryDate: "",
@@ -400,17 +433,19 @@ function FlightPage({ session }: { session: Session | null }) {
       <Link to="/flights" className="back-link">← All flights</Link>
       <div className="detail-layout">
         <div>
-          <div className="detail-banner"><span className="detail-airline"><Plane size={18} /> {flight.airline} · {flight.flightNumber} · {flight.dataSource === "LIVE" ? "LIVE" : "DEMO"}</span><div className="detail-route"><div><span>{flight.originCode}</span><small>{flight.originCity}</small><b>{clock(flight.departure, flight.originTimeZone)}</b></div><div className="detail-route-line"><span /> <small><Clock3 size={14} /> {Math.round((new Date(flight.arrival).getTime() - new Date(flight.departure).getTime()) / 60000)} min · non-stop</small><span /></div><div><span>{flight.destinationCode}</span><small>{flight.destinationCity}</small><b>{clock(flight.arrival, flight.destinationTimeZone)}</b></div></div><div className="detail-date">{day(flight.departure, flight.originTimeZone)} <span>·</span> {flight.currency} demo fare, taxes included</div></div>
-          <div className="seat-section"><div className="section-title"><div><span className="eyebrow muted">OUTBOUND · {passengerCount} PASSENGER{passengerCount === 1 ? "" : "S"}</span><h2>Choose {passengerCount === 1 ? "your seat" : "your seats"}</h2></div><span className="seat-legend"><i /> Available</span></div><div className="seat-grid">{seats.map((item) => <button key={item} type="button" disabled={!selectedSeats.includes(item) && selectedSeats.length >= passengerCount} onClick={() => toggleSeat(item, selectedSeats, setSelectedSeats)} className={`seat ${selectedSeats.includes(item) ? "selected" : ""}`} aria-pressed={selectedSeats.includes(item)}>{item}</button>)}</div><p className="seat-note">Choose {passengerCount} distinct seats. Demo availability is confirmed when you continue.</p></div>
+          <div className="detail-banner"><span className="detail-airline"><Plane size={18} /> {flight.airline} · {flight.flightNumber} · {flight.dataSource === "LIVE" ? "LIVE" : "DEMO"}</span><div className="detail-route"><div><span>{flight.originCode}</span><small>{flight.originCity}</small><b>{clock(flight.departure, flight.originTimeZone)}</b></div><div className="detail-route-line"><span /> <small><Clock3 size={14} /> {Math.round((new Date(flight.arrival).getTime() - new Date(flight.departure).getTime()) / 60000)} min · non-stop</small><span /></div><div><span>{flight.destinationCode}</span><small>{flight.destinationCity}</small><b>{clock(flight.arrival, flight.destinationTimeZone)}</b></div></div><div className="detail-date">{day(flight.departure, flight.originTimeZone)} <span>·</span> {flight.currency} illustrative DEMO fare</div></div>
+          <div className="flight-spec-grid"><article><small>STATUS · SIMULATED</small><b>{flight.status}</b></article><article><small>AIRCRAFT</small><b>{flight.aircraft || "Not configured"}</b></article><article><small>ORIGIN TERMINAL</small><b>{flight.originTerminal || "Not configured"}</b></article><article><small>DESTINATION TERMINAL</small><b>{flight.destinationTerminal || "Not configured"}</b></article><article><small>DEPARTURE TIMEZONE</small><b>{flight.originTimeZone || "Not configured"}</b></article><article><small>ARRIVAL TIMEZONE</small><b>{flight.destinationTimeZone || "Not configured"}</b></article><article><small>SELECTED CABIN</small><b>{travelClass.replace("_", " ")}</b></article><article><small>AVAILABLE CABIN SEATS</small><b>{seats.length}</b></article><article><small>BAGGAGE ALLOWANCE</small><b>Not configured</b></article><article><small>FARE CONDITIONS</small><b>Demo fare · cancellation rules simulated</b></article></div>
+          {flight.status !== "SCHEDULED" && <div className="error-note" role="status">This simulated flight is {flight.status.toLowerCase()} and cannot be booked.</div>}
+          <div className="seat-section"><div className="section-title"><div><span className="eyebrow muted">OUTBOUND · {passengerCount} PASSENGER{passengerCount === 1 ? "" : "S"} · {travelClass.replace("_", " ")}</span><h2>Choose {passengerCount === 1 ? "your seat" : "your seats"}</h2></div><span className="seat-legend"><i /> Available</span></div><div className="seat-grid">{seats.map((item) => <button key={item} type="button" disabled={flight.status !== "SCHEDULED" || !selectedSeats.includes(item) && selectedSeats.length >= passengerCount} onClick={() => toggleSeat(item, selectedSeats, setSelectedSeats)} className={`seat ${selectedSeats.includes(item) ? "selected" : ""}`} aria-pressed={selectedSeats.includes(item)}>{item}</button>)}</div><p className="seat-note">Seats are grouped by cabin. Availability is rechecked atomically when you continue.</p></div>
           {roundTrip && <div className="seat-section return-flight-section">
             <div className="section-title"><div><span className="eyebrow muted">RETURN · {returnDate || "DATE NOT SET"}</span><h2>Choose your return flight</h2></div></div>
             {returnFlights.length ? <div className="return-flight-list">{returnFlights.map((item) =>
               <button type="button" key={item.id} className={`return-flight-option ${returnFlight?.id === item.id ? "selected" : ""}`}
-                aria-pressed={returnFlight?.id === item.id} onClick={() => chooseReturnFlight(item)}>
-                <span><b>{item.airline} · {item.flightNumber}</b><small>{item.originCode} {clock(item.departure, item.originTimeZone)} → {item.destinationCode} {clock(item.arrival, item.destinationTimeZone)}</small></span>
+                aria-pressed={returnFlight?.id === item.id} disabled={item.status !== "SCHEDULED"} onClick={() => chooseReturnFlight(item)}>
+                <span><b>{item.airline} · {item.flightNumber} · {item.status}</b><small>{item.originCode} {clock(item.departure, item.originTimeZone)} → {item.destinationCode} {clock(item.arrival, item.destinationTimeZone)}</small></span>
                 <strong>{money(item.price, item.currency)}</strong>
               </button>)}</div> : <p className="seat-note">No DEMO return flights are scheduled for this date. Try the suggested return date or choose one-way.</p>}
-            {returnFlight && <><div className="section-title return-seat-heading"><div><span className="eyebrow muted">RETURN SEATS</span><h2>Choose {passengerCount === 1 ? "your seat" : "your seats"}</h2></div></div><div className="seat-grid">{returnSeats.map((item) => <button key={item} type="button" disabled={!selectedReturnSeats.includes(item) && selectedReturnSeats.length >= passengerCount} onClick={() => toggleSeat(item, selectedReturnSeats, setSelectedReturnSeats)} className={`seat ${selectedReturnSeats.includes(item) ? "selected" : ""}`} aria-pressed={selectedReturnSeats.includes(item)}>{item}</button>)}</div></>}
+            {returnFlight && <><div className="section-title return-seat-heading"><div><span className="eyebrow muted">RETURN SEATS · {travelClass.replace("_", " ")}</span><h2>Choose {passengerCount === 1 ? "your seat" : "your seats"}</h2></div></div><div className="seat-grid">{returnSeats.map((item) => <button key={item} type="button" disabled={!selectedReturnSeats.includes(item) && selectedReturnSeats.length >= passengerCount} onClick={() => toggleSeat(item, selectedReturnSeats, setSelectedReturnSeats)} className={`seat ${selectedReturnSeats.includes(item) ? "selected" : ""}`} aria-pressed={selectedReturnSeats.includes(item)}>{item}</button>)}</div></>}
           </div>}
         </div>
         <aside className="booking-side"><div className="side-heading"><span className="eyebrow muted">PASSENGER DETAILS</span><h2>Almost there.</h2><p>Demo booking for {passengerCount} passenger{passengerCount === 1 ? "" : "s"} · {travelClass.replace("_", " ").toLowerCase()}.</p></div><form onSubmit={submit} className="stack-form">
@@ -420,8 +455,8 @@ function FlightPage({ session }: { session: Session | null }) {
           <label>Contact email<input required type="email" maxLength={254} value={email} onChange={(e) => { setEmail(e.target.value); setIdempotencyKey(crypto.randomUUID()); }} placeholder="you@example.com" /></label>
           {mode === "international" && <p className="form-hint">Demo only: passport number is not collected. Check official entry requirements before travel.</p>}
           {error && <ErrorNote message={error} />}{!session && <p className="form-hint">You’ll sign in before creating your booking.</p>}
-          <div className="fare-summary"><span>Outbound / passenger</span><b>{money(flight.price, flight.currency)}</b>{returnFlight && <><span>Return / passenger</span><b>{money(returnFlight.price, returnFlight.currency)}</b></>}<span>Passengers · {travelClass.replace("_", " ")}</span><b>{passengerCount} · ×{classMultiplier}</b><span>Selected outbound seats</span><b>{selectedSeats.length ? selectedSeats.join(", ") : "not selected"}</b>{returnFlight && <><span>Selected return seats</span><b>{selectedReturnSeats.length ? selectedReturnSeats.join(", ") : "not selected"}</b></>}<span>Estimated total · demo fare</span><b>{money(estimatedTotal, flight.currency)}</b></div>
-          <button className="primary-button full" disabled={busy}>{busy ? "Creating booking…" : <>Continue to payment <ArrowRight size={17} /></>}</button><p className="safe-note"><LockKeyhole size={13} /> {mode === "international" ? "Demo itinerary · no airline ticket issued" : "Secure checkout powered by Razorpay"}</p></form></aside>
+          <div className="fare-summary"><span>Outbound / passenger · all-inclusive demo fare</span><b>{money(flight.price, flight.currency)}</b>{returnFlight && <><span>Return / passenger · all-inclusive demo fare</span><b>{money(returnFlight.price, returnFlight.currency)}</b></>}<span>Passengers · {travelClass.replace("_", " ")}</span><b>{passengerCount} · ×{classMultiplier}</b><span>Selected outbound seats</span><b>{selectedSeats.length ? selectedSeats.join(", ") : "not selected"}</b>{returnFlight && <><span>Selected return seats</span><b>{selectedReturnSeats.length ? selectedReturnSeats.join(", ") : "not selected"}</b></>}<span>Estimated total · demo fare</span><b>{money(estimatedTotal, flight.currency)}</b></div>
+          <button className="primary-button full" disabled={busy || flight.status !== "SCHEDULED"}>{busy ? "Creating booking…" : <>Continue to payment <ArrowRight size={17} /></>}</button><p className="safe-note"><LockKeyhole size={13} /> {mode === "international" ? "Demo itinerary · no airline ticket issued" : "Demo checkout · no airline inventory"}</p></form></aside>
       </div>
     </section>
   );
@@ -469,7 +504,7 @@ function BookingsPage() {
     const outbound = flightById.get(booking.flightId);
     const returnFlight = booking.tripDetails?.returnFlightId ? flightById.get(booking.tripDetails.returnFlightId) : undefined;
     const seats = booking.tripDetails?.seatNumbers?.length ? booking.tripDetails.seatNumbers : [booking.seatNumber];
-    return <article className="booking-card" key={booking.id}><div className="booking-status"><span className={`status-pill status-${booking.status.toLowerCase()}`}>{booking.status.replace("_", " ")}</span><span className="pnr">BOOKING REF · {booking.pnr}</span></div><div className="booking-info"><div><span className="eyebrow muted">{returnFlight ? "ROUND TRIP" : "FLIGHT"}</span><h3>{outbound?.originCode ?? "—"} <ArrowRight size={18} /> {outbound?.destinationCode ?? "—"}</h3><p>{outbound ? day(outbound.departure, outbound.originTimeZone) : "Flight details"} · Seats {seats.join(", ")}</p>{returnFlight && <p>Return · {returnFlight.originCode} → {returnFlight.destinationCode} · {day(returnFlight.departure, returnFlight.originTimeZone)} · Seats {booking.tripDetails?.returnSeatNumbers.join(", ")}</p>}<p>{booking.tripDetails?.passengers.length ?? 1} passenger(s) · {(booking.tripDetails?.travelClass ?? "ECONOMY").replace("_", " ")}</p></div><div className="booking-amount"><small>Paid / due</small><b>{money(booking.amount, booking.currency)}</b></div></div><div className="booking-actions">{booking.status === "CONFIRMED" && <Link to={`/ticket/${booking.id}`} className="text-link">View itinerary <ArrowUpRight size={16} /></Link>}{booking.status === "PENDING_PAYMENT" && <Link to={`/checkout/${booking.id}`} className="text-link">Complete payment <ArrowRight size={16} /></Link>}{booking.status !== "CANCELLED" && <button className="cancel-button" onClick={() => cancel(booking.id)}>Cancel trip</button>}</div></article>;
+    return <article className="booking-card" key={booking.id}><div className="booking-status"><span className={`status-pill status-${booking.status.toLowerCase()}`}>{booking.status.replace("_", " ")}</span><span className="pnr">BOOKING REF · {booking.pnr}</span></div><div className="booking-info"><div><span className="eyebrow muted">{returnFlight ? "ROUND TRIP" : "FLIGHT"}</span><h3>{outbound?.originCode ?? "—"} <ArrowRight size={18} /> {outbound?.destinationCode ?? "—"}</h3><p>{outbound ? day(outbound.departure, outbound.originTimeZone) : "Flight details"} · Seats {seats.join(", ")}</p>{returnFlight && <p>Return · {returnFlight.originCode} → {returnFlight.destinationCode} · {day(returnFlight.departure, returnFlight.originTimeZone)} · Seats {booking.tripDetails?.returnSeatNumbers.join(", ")}</p>}<p>{booking.tripDetails?.passengers.length ?? 1} passenger(s) · {(booking.tripDetails?.travelClass ?? "ECONOMY").replace("_", " ")}</p>{booking.status === "PENDING_PAYMENT" && booking.expiresAt && <p>Seat hold expires {new Date(booking.expiresAt).toLocaleTimeString()}.</p>}{booking.status === "EXPIRED" && <p>This seat hold expired. Start a new booking to select current availability.</p>}</div><div className="booking-amount"><small>Paid / due</small><b>{money(booking.amount, booking.currency)}</b></div></div><div className="booking-actions">{booking.status === "CONFIRMED" && <Link to={`/ticket/${booking.id}`} className="text-link">View itinerary <ArrowUpRight size={16} /></Link>}{booking.status === "PENDING_PAYMENT" && <Link to={`/checkout/${booking.id}`} className="text-link">Complete payment <ArrowRight size={16} /></Link>}{(booking.status === "CONFIRMED" || booking.status === "PENDING_PAYMENT") && <button className="cancel-button" onClick={() => cancel(booking.id)}>Cancel trip</button>}</div></article>;
   })}</div> : <div className="empty-state"><Ticket size={30} /><h3>Your next trip belongs here</h3><p>You haven’t booked any journeys yet. Let’s find somewhere worth going.</p><Link className="primary-button" to="/flights">Explore flights <ArrowRight size={16} /></Link></div>}</section>;
 }
 
@@ -597,20 +632,34 @@ function AdminPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
+  const [routes, setRoutes] = useState<RouteTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [editingFlightId, setEditingFlightId] = useState("");
+  const [flightSearch, setFlightSearch] = useState("");
+  const [flightDateFilter, setFlightDateFilter] = useState("");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState("");
+  const [editingRouteId, setEditingRouteId] = useState("");
+  const [routeForm, setRouteForm] = useState({
+    airline: "JetSetGo Demonstration Air", flightNumber: "JG 2001",
+    originCode: "DEL", originCity: "Delhi", destinationCode: "BOM", destinationCity: "Mumbai",
+    departureLocalTime: "10:30", durationMinutes: "130", operatingDays: [1, 2, 3, 4, 5, 6, 7],
+    originTimeZone: "Asia/Kolkata", destinationTimeZone: "Asia/Kolkata",
+    baseFare: "5000", currency: "INR", capacity: "48", aircraft: "Illustrative narrow-body aircraft",
+  });
   const [form, setForm] = useState({
     airline: "", flightNumber: "", originCode: "", originCity: "",
     destinationCode: "", destinationCity: "", departure: "", arrival: "",
-    price: "", capacity: "48",
+    price: "", capacity: "48", originTimeZone: "Asia/Kolkata",
+    destinationTimeZone: "Asia/Kolkata", aircraft: "", originTerminal: "", destinationTerminal: "",
   });
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.adminSummary(), api.adminFlights(), api.adminBookings(), api.adminUsers()])
-      .then(([nextSummary, nextFlights, nextBookings, nextUsers]) => {
-        setSummary(nextSummary); setFlights(nextFlights); setBookings(nextBookings); setUsers(nextUsers);
+    Promise.all([api.adminSummary(), api.adminFlights(), api.adminBookings(), api.adminUsers(), api.adminRoutes()])
+      .then(([nextSummary, nextFlights, nextBookings, nextUsers, nextRoutes]) => {
+        setSummary(nextSummary); setFlights(nextFlights); setBookings(nextBookings); setUsers(nextUsers); setRoutes(nextRoutes);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -622,16 +671,21 @@ function AdminPage() {
   async function addFlight(event: React.FormEvent) {
     event.preventDefault(); setError(""); setNotice("");
     try {
-      await api.createFlight({
+      const payload = {
         ...form,
         departure: new Date(form.departure).toISOString(),
         arrival: new Date(form.arrival).toISOString(),
         price: Number(form.price),
         capacity: Number(form.capacity),
-      });
-      setNotice("Demo flight added with its own seat inventory.");
+      };
+      if (editingFlightId) await api.updateFlight(editingFlightId, payload);
+      else await api.createFlight(payload);
+      setNotice(editingFlightId ? "Flight updated." : "Demo flight added; seat inventory will initialize on demand.");
+      setEditingFlightId("");
       setForm({ airline: "", flightNumber: "", originCode: "", originCity: "",
-        destinationCode: "", destinationCity: "", departure: "", arrival: "", price: "", capacity: "48" });
+        destinationCode: "", destinationCity: "", departure: "", arrival: "", price: "", capacity: "48",
+        originTimeZone: "Asia/Kolkata", destinationTimeZone: "Asia/Kolkata",
+        aircraft: "", originTerminal: "", destinationTerminal: "" });
       setRefresh((value) => value + 1);
     } catch (e) { setError((e as Error).message); }
   }
@@ -646,23 +700,127 @@ function AdminPage() {
     try { await api.deleteFlight(flight.id); setNotice("Flight removed."); setRefresh((value) => value + 1); }
     catch (e) { setError((e as Error).message); }
   }
+  function editFlight(flight: Flight) {
+    if (flight.routeTemplateId) {
+      setError("This flight is generated from a recurring route. Edit its route template instead.");
+      document.getElementById("route-template-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setEditingFlightId(flight.id);
+    setForm({
+      airline: flight.airline, flightNumber: flight.flightNumber,
+      originCode: flight.originCode, originCity: flight.originCity,
+      destinationCode: flight.destinationCode, destinationCity: flight.destinationCity,
+      departure: toLocalDateTimeInput(flight.departure), arrival: toLocalDateTimeInput(flight.arrival),
+      price: String(flight.price), capacity: String(flight.capacity),
+      originTimeZone: flight.originTimeZone ?? "Asia/Kolkata",
+      destinationTimeZone: flight.destinationTimeZone ?? "Asia/Kolkata",
+      aircraft: flight.aircraft ?? "", originTerminal: flight.originTerminal ?? "",
+      destinationTerminal: flight.destinationTerminal ?? "",
+    });
+    document.getElementById("flight-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  async function cancelAdminBooking(booking: Booking) {
+    if (!window.confirm(`Cancel booking ${booking.pnr}? A demo refund is recorded or a Razorpay Test Mode refund is requested.`)) return;
+    setError(""); setNotice("");
+    try { await api.cancelAdminBooking(booking.id); setNotice(`Booking ${booking.pnr} cancelled.`); setRefresh((value) => value + 1); }
+    catch (e) { setError((e as Error).message); }
+  }
+  function updateRouteForm(field: keyof typeof routeForm, value: string) {
+    setRouteForm((current) => ({ ...current, [field]: value }));
+  }
+  function editRoute(route: RouteTemplate) {
+    setEditingRouteId(route.id);
+    setRouteForm({
+      airline: route.airline, flightNumber: route.flightNumber,
+      originCode: route.originCode, originCity: route.originCity,
+      destinationCode: route.destinationCode, destinationCity: route.destinationCity,
+      departureLocalTime: route.departureLocalTime, durationMinutes: String(route.durationMinutes),
+      operatingDays: route.operatingDays, originTimeZone: route.originTimeZone,
+      destinationTimeZone: route.destinationTimeZone, baseFare: String(route.baseFare),
+      currency: route.currency, capacity: String(route.capacity), aircraft: route.aircraft ?? "",
+    });
+    document.getElementById("route-template-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  async function saveRoute(event: React.FormEvent) {
+    event.preventDefault(); setError(""); setNotice("");
+    const payload = {
+      ...routeForm,
+      durationMinutes: Number(routeForm.durationMinutes),
+      baseFare: Number(routeForm.baseFare),
+      capacity: Number(routeForm.capacity),
+    };
+    try {
+      if (editingRouteId) await api.updateRoute(editingRouteId, payload);
+      else await api.createRoute(payload);
+      setNotice(editingRouteId
+        ? "Route updated. Eligible unbooked future flights were refreshed."
+        : "Recurring route saved. Future demo flights are being scheduled.");
+      setEditingRouteId("");
+      setRefresh((value) => value + 1);
+    } catch (e) { setError((e as Error).message); }
+  }
+  async function toggleRoute(route: RouteTemplate) {
+    setError(""); setNotice("");
+    try {
+      await api.setRouteActive(route.id, !route.active);
+      setNotice(route.active ? "Route disabled. Booked flights were preserved." : "Route enabled.");
+      setRefresh((value) => value + 1);
+    } catch (e) { setError((e as Error).message); }
+  }
   if (loading) return <Loading />;
+  const visibleAdminFlights = flights.filter((flight) => {
+    const term = flightSearch.trim().toLowerCase();
+    const matchesText = !term || [flight.flightNumber, flight.originCode, flight.destinationCode,
+      flight.airline, flight.originCity, flight.destinationCity].some((value) => value.toLowerCase().includes(term));
+    const localDate = new Date(flight.departure).toLocaleDateString("en-CA", {
+      timeZone: flight.originTimeZone ?? undefined,
+    });
+    return matchesText && (!flightDateFilter || localDate === flightDateFilter);
+  });
+  const visibleAdminBookings = bookings.filter((booking) =>
+    !bookingStatusFilter || booking.status === bookingStatusFilter);
   return <section className="content-page admin-page">
     <div className="page-kicker"><span className="eyebrow-line" /> JET SET GO · OPERATIONS</div>
     <div className="page-heading-row"><div><h1>A clear view of the journey.</h1><p>Demo operations dashboard. Changes here apply to the connected database.</p></div><span className="admin-mode"><LayoutDashboard size={14} /> ADMIN</span></div>
     {error && <ErrorNote message={error} />}{notice && <div className="success-note" role="status">{notice}</div>}
     {summary && <div className="admin-metrics">
       <article><span><Plane size={16} /></span><small>DEMO FLIGHTS</small><b>{summary.totalFlights}</b></article>
+      <article><span><Plane size={16} /></span><small>ACTIVE · UPCOMING</small><b>{summary.activeFlights}</b></article>
+      <article><span><Clock3 size={16} /></span><small>DEPARTURES · 24 HOURS</small><b>{summary.upcomingDepartures}</b></article>
       <article><span><Ticket size={16} /></span><small>ALL BOOKINGS</small><b>{summary.totalBookings}</b></article>
+      <article><span><Check size={16} /></span><small>CONFIRMED BOOKINGS</small><b>{summary.confirmedBookings}</b></article>
       <article><span><Users size={16} /></span><small>REGISTERED USERS</small><b>{summary.registeredUsers}</b></article>
       <article><span><BarChart3 size={16} /></span><small>CONFIRMED BOOKING VALUE</small><b>{money(summary.confirmedRevenue)}</b></article>
     </div>}
-    {summary && <div className="admin-pulse"><div><span>Cancelled bookings</span><b>{summary.cancelledBookings}</b></div><div className="admin-bar"><span style={{ width: `${summary.totalBookings ? Math.min(100, summary.cancelledBookings / summary.totalBookings * 100) : 0}%` }} /></div><small>Demo bookings only · not airline revenue</small></div>}
+    {summary && <div className="admin-pulse"><div><span>Seat occupancy · upcoming capacity</span><b>{summary.seatOccupancy.toFixed(1)}%</b></div><div className="admin-bar"><span style={{ width: `${summary.seatOccupancy}%` }} /></div><small>Cancelled bookings · {summary.cancelledBookings} · simulated revenue only</small></div>}
     <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">SCHEDULE MANAGEMENT</span><h2>Flights</h2></div><span className="demo-tag">DEMO DATA</span></div>
-      {flights.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>FLIGHT</th><th>ROUTE</th><th>DEPARTURE</th><th>FARE</th><th>STATUS</th><th /></tr></thead><tbody>{flights.map((flight) => <tr key={flight.id}><td><b>{flight.flightNumber}</b><small>{flight.airline}</small></td><td>{flight.originCode} <ArrowRight size={13} /> {flight.destinationCode}</td><td>{day(flight.departure, flight.originTimeZone)} · {clock(flight.departure, flight.originTimeZone)}</td><td>{money(flight.price, flight.currency)}</td><td><select value={flight.status} onChange={(event) => setFlightStatus(flight.id, event.target.value)} aria-label={`Set ${flight.flightNumber} status`}>{["SCHEDULED", "DELAYED", "CANCELLED", "DEPARTED", "COMPLETED"].map((status) => <option key={status}>{status}</option>)}</select></td><td><button className="admin-delete" aria-label={`Delete ${flight.flightNumber}`} onClick={() => removeFlight(flight)}><Trash2 size={15} /></button></td></tr>)}</tbody></table></div> : <div className="admin-empty">No flights yet. Add the first schedule below.</div>}
+      <div className="admin-flight-filters"><label className="admin-search">Find by flight, airline, city, or airport<input value={flightSearch} onChange={(event) => setFlightSearch(event.target.value)} placeholder="e.g. JG 101 or DEL" /></label><label className="admin-search">Departure date<input type="date" value={flightDateFilter} onChange={(event) => setFlightDateFilter(event.target.value)} /></label></div>
+      {visibleAdminFlights.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>FLIGHT</th><th>ROUTE</th><th>DEPARTURE</th><th>FARE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{visibleAdminFlights.map((flight) => <tr key={flight.id}><td><b>{flight.flightNumber}</b><small>{flight.airline} · {flight.aircraft || "Aircraft not configured"}</small></td><td>{flight.originCode} <ArrowRight size={13} /> {flight.destinationCode}<small>{flight.originTerminal || "Terminal not configured"} → {flight.destinationTerminal || "Terminal not configured"}</small></td><td>{day(flight.departure, flight.originTimeZone)} · {clock(flight.departure, flight.originTimeZone)}</td><td>{money(flight.price, flight.currency)}</td><td><select value={flight.status} onChange={(event) => setFlightStatus(flight.id, event.target.value)} aria-label={`Set ${flight.flightNumber} status`}>{Array.from(new Set([flight.status, ...(flight.status === "SCHEDULED" ? ["DELAYED", "CANCELLED"] : flight.status === "DELAYED" ? ["SCHEDULED", "CANCELLED"] : flight.status === "DEPARTED" ? ["COMPLETED"] : [])])).map((status) => <option key={status}>{status}</option>)}</select></td><td><div className="admin-route-actions"><button className="outline-button" type="button" onClick={() => editFlight(flight)}>{flight.routeTemplateId ? "Template" : "Edit"}</button><button className="admin-delete" aria-label={`Delete ${flight.flightNumber}`} disabled={Boolean(flight.routeTemplateId)} onClick={() => removeFlight(flight)}><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div> : <div className="admin-empty">No flights match this search.</div>}
     </section>
-    <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">ADD TO THE DEMO SCHEDULE</span><h2>New flight</h2></div><span className="form-hint">Times use your browser’s local timezone.</span></div>
-      <form className="admin-flight-form" onSubmit={addFlight}>
+    <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">RECURRING DEMO ROUTES</span><h2>Route templates</h2></div><span className="form-hint">Creates rolling 120-day schedules</span></div>
+      {routes.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ROUTE</th><th>FLIGHT</th><th>DEPARTURE · TIMEZONE</th><th>OPERATES</th><th>FARE</th><th /></tr></thead><tbody>{routes.map((route) => <tr key={route.id}><td>{route.originCode} → {route.destinationCode}<small>{route.originCity} to {route.destinationCity}</small></td><td><b>{route.flightNumber}</b><small>{route.airline} · {route.aircraft || "Aircraft not configured"}</small></td><td>{route.departureLocalTime}<small>{route.originTimeZone} · {route.durationMinutes} min</small></td><td>{route.operatingDays.length === 7 ? "Daily" : route.operatingDays.join(", ")}</td><td>{money(route.baseFare, route.currency)}</td><td className="admin-route-actions"><button className="outline-button" type="button" onClick={() => editRoute(route)}>Edit</button><button className="outline-button" type="button" onClick={() => toggleRoute(route)}>{route.active ? "Disable" : "Enable"}</button></td></tr>)}</tbody></table></div> : <div className="admin-empty">No recurring route templates.</div>}
+      <form className="admin-flight-form" id="route-template-form" onSubmit={saveRoute}>
+        <label>Airline<input required maxLength={100} value={routeForm.airline} onChange={(event) => updateRouteForm("airline", event.target.value)} /></label>
+        <label>Flight number<input required maxLength={12} value={routeForm.flightNumber} onChange={(event) => updateRouteForm("flightNumber", event.target.value)} /></label>
+        <label>Origin IATA<input required pattern="[A-Za-z]{3}" maxLength={3} value={routeForm.originCode} onChange={(event) => updateRouteForm("originCode", event.target.value.toUpperCase())} /></label>
+        <label>Origin city<input required maxLength={100} value={routeForm.originCity} onChange={(event) => updateRouteForm("originCity", event.target.value)} /></label>
+        <label>Destination IATA<input required pattern="[A-Za-z]{3}" maxLength={3} value={routeForm.destinationCode} onChange={(event) => updateRouteForm("destinationCode", event.target.value.toUpperCase())} /></label>
+        <label>Destination city<input required maxLength={100} value={routeForm.destinationCity} onChange={(event) => updateRouteForm("destinationCity", event.target.value)} /></label>
+        <label>Local departure<input required type="time" value={routeForm.departureLocalTime} onChange={(event) => updateRouteForm("departureLocalTime", event.target.value)} /></label>
+        <label>Duration (minutes)<input required type="number" min="20" max="1800" value={routeForm.durationMinutes} onChange={(event) => updateRouteForm("durationMinutes", event.target.value)} /></label>
+        <label>Origin IANA timezone<input required value={routeForm.originTimeZone} onChange={(event) => updateRouteForm("originTimeZone", event.target.value)} placeholder="Asia/Kolkata" /></label>
+        <label>Destination IANA timezone<input required value={routeForm.destinationTimeZone} onChange={(event) => updateRouteForm("destinationTimeZone", event.target.value)} placeholder="Asia/Dubai" /></label>
+        <label>Base demo fare<input required type="number" min="1" step="1" value={routeForm.baseFare} onChange={(event) => updateRouteForm("baseFare", event.target.value)} /></label>
+        <label>Currency<input required pattern="[A-Za-z]{3}" maxLength={3} value={routeForm.currency} onChange={(event) => updateRouteForm("currency", event.target.value.toUpperCase())} /></label>
+        <label>Capacity<input required type="number" min="6" max="360" value={routeForm.capacity} onChange={(event) => updateRouteForm("capacity", event.target.value)} /></label>
+        <label>Aircraft<input maxLength={100} value={routeForm.aircraft} onChange={(event) => updateRouteForm("aircraft", event.target.value)} /></label>
+        <fieldset className="route-days"><legend>Operating days · 1 Monday through 7 Sunday</legend>{[1, 2, 3, 4, 5, 6, 7].map((dayNumber) => <label key={dayNumber}><input type="checkbox" checked={routeForm.operatingDays.includes(dayNumber)} onChange={(event) => setRouteForm((current) => ({ ...current, operatingDays: event.target.checked ? [...current.operatingDays, dayNumber].sort() : current.operatingDays.filter((day) => day !== dayNumber) }))} />{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][dayNumber - 1]}</label>)}</fieldset>
+        <div className="admin-route-actions"><button className="primary-button admin-submit" type="submit"><Plus size={16} /> {editingRouteId ? "Save route changes" : "Create recurring route"}</button>{editingRouteId && <button className="outline-button" type="button" onClick={() => setEditingRouteId("")}>Cancel edit</button>}</div>
+      </form>
+    </section>
+    <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">{editingFlightId ? "EDIT FUTURE FLIGHT" : "ADD TO THE DEMO SCHEDULE"}</span><h2>{editingFlightId ? "Update flight" : "New flight"}</h2></div><span className="form-hint">Times use your browser’s local timezone.</span></div>
+      <form className="admin-flight-form" id="flight-form" onSubmit={addFlight}>
         <label>Airline<input required maxLength={100} value={form.airline} onChange={(event) => updateForm("airline", event.target.value)} /></label>
         <label>Flight number<input required maxLength={12} value={form.flightNumber} onChange={(event) => updateForm("flightNumber", event.target.value)} placeholder="e.g. 6E 204" /></label>
         <label>Origin IATA<input required pattern="[A-Za-z]{3}" maxLength={3} value={form.originCode} onChange={(event) => updateForm("originCode", event.target.value.toUpperCase())} placeholder="DEL" /></label>
@@ -673,11 +831,16 @@ function AdminPage() {
         <label>Arrival<input required type="datetime-local" value={form.arrival} onChange={(event) => updateForm("arrival", event.target.value)} /></label>
         <label>Fare (INR)<input required type="number" min="1" step="1" value={form.price} onChange={(event) => updateForm("price", event.target.value)} /></label>
         <label>Seat capacity<input required type="number" min="6" max="360" step="1" value={form.capacity} onChange={(event) => updateForm("capacity", event.target.value)} /></label>
-        <button className="primary-button admin-submit" type="submit"><Plus size={16} /> Add demo flight</button>
+        <label>Aircraft<input maxLength={100} value={form.aircraft} onChange={(event) => updateForm("aircraft", event.target.value)} /></label>
+        <label>Origin terminal<input maxLength={40} value={form.originTerminal} onChange={(event) => updateForm("originTerminal", event.target.value)} /></label>
+        <label>Destination terminal<input maxLength={40} value={form.destinationTerminal} onChange={(event) => updateForm("destinationTerminal", event.target.value)} /></label>
+        <label>Origin timezone<input value={form.originTimeZone} onChange={(event) => updateForm("originTimeZone", event.target.value)} placeholder="Asia/Kolkata" /></label>
+        <label>Destination timezone<input value={form.destinationTimeZone} onChange={(event) => updateForm("destinationTimeZone", event.target.value)} placeholder="Asia/Dubai" /></label>
+        <div className="admin-route-actions"><button className="primary-button admin-submit" type="submit"><Plus size={16} /> {editingFlightId ? "Save flight changes" : "Add demo flight"}</button>{editingFlightId && <button className="outline-button" type="button" onClick={() => setEditingFlightId("")}>Cancel edit</button>}</div>
       </form>
     </section>
-    <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">RECENT ACTIVITY</span><h2>Bookings</h2></div></div>
-      {bookings.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>REFERENCE</th><th>PASSENGER</th><th>FLIGHT</th><th>VALUE</th><th>STATUS</th></tr></thead><tbody>{bookings.slice(0, 12).map((booking) => <tr key={booking.id}><td><b>{booking.pnr}</b></td><td>{booking.passengerName}<small>{booking.passengerEmail}</small></td><td>{flights.find((flight) => flight.id === booking.flightId)?.flightNumber ?? "—"}</td><td>{money(booking.amount, booking.currency)}</td><td><span className={`status-pill status-${booking.status.toLowerCase()}`}>{booking.status.replace("_", " ")}</span></td></tr>)}</tbody></table></div> : <div className="admin-empty">No bookings yet.</div>}
+    <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">BOOKING MANAGEMENT</span><h2>Bookings</h2></div><label className="admin-filter">Status<select value={bookingStatusFilter} onChange={(event) => setBookingStatusFilter(event.target.value)}><option value="">All statuses</option>{["PENDING_PAYMENT", "PAYMENT_PROCESSING", "CONFIRMED", "CANCELLING", "CANCELLED", "EXPIRED"].map((status) => <option key={status}>{status}</option>)}</select></label></div>
+      {visibleAdminBookings.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>REFERENCE</th><th>PASSENGER</th><th>FLIGHT</th><th>VALUE</th><th>STATUS</th><th /></tr></thead><tbody>{visibleAdminBookings.slice(0, 50).map((booking) => <tr key={booking.id}><td><b>{booking.pnr}</b></td><td>{booking.passengerName}<small>{booking.passengerEmail}</small></td><td>{flights.find((flight) => flight.id === booking.flightId)?.flightNumber ?? "—"}</td><td>{money(booking.amount, booking.currency)}</td><td><span className={`status-pill status-${booking.status.toLowerCase()}`}>{booking.status.replace("_", " ")}</span></td><td>{["CONFIRMED", "PENDING_PAYMENT"].includes(booking.status) && <button className="cancel-button" onClick={() => cancelAdminBooking(booking)}>Cancel booking</button>}</td></tr>)}</tbody></table></div> : <div className="admin-empty">No bookings match this status.</div>}
     </section>
     <section className="admin-panel"><div className="admin-section-heading"><div><span className="eyebrow muted">ACCOUNT DIRECTORY</span><h2>Users</h2></div></div>
       {users.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>NAME</th><th>EMAIL</th><th>ROLE</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td>{user.name}</td><td>{user.email}</td><td>{user.role}</td></tr>)}</tbody></table></div> : <div className="admin-empty">No users yet.</div>}

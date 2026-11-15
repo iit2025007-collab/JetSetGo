@@ -155,3 +155,34 @@
 .demo-data-pill{margin-left:auto;padding:5px 7px;background:#f4efe4;color:#927a4e;font-size:7px;letter-spacing:.8px;font-weight:700}
 @media(max-width:760px){.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-panel{padding:15px}.admin-flight-form{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-section-heading{gap:10px}.admin-section-heading .form-hint{max-width:140px;text-align:right;font-size:8px}}
 @media(max-width:420px){.admin-metrics article{min-height:95px;padding:11px}.admin-metrics article>b{font-size:19px}.admin-flight-form{gap:9px}.admin-flight-form input{font-size:8px}.demo-actions{grid-template-columns:1fr}.admin-mode{font-size:7px}}
+/* Flight schedule and cabin details */
+.date-strip{display:flex;gap:8px;overflow-x:auto;margin:-12px 0 20px}
+.date-strip a{min-width:86px;padding:10px 12px;border:1px solid #e1e6e3;background:#fff;display:flex;flex-direction:column;gap:3px;color:#51636e}
+.date-strip a.active{border-color:#5d877e;background:#edf3f0;color:#254d4d}
+.date-strip small{font-size:8px;text-transform:uppercase;letter-spacing:.8px}
+.date-strip b{font:600 12px "Manrope",sans-serif}
+.status-scheduled,.status-confirmed{background:#edf4ef;color:#527c66}
+.status-delayed,.status-pending_payment,.status-payment_processing{background:#faf1df;color:#947541}
+.status-cancelled,.status-expired{background:#f4eeee;color:#93645f}
+.status-departed,.status-completed{background:#eaf0f5;color:#536d84}
+.flight-spec-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin-top:12px;background:#e8ece9;border:1px solid #e8ece9}
+.flight-spec-grid article{min-height:60px;padding:12px;background:#fff;display:flex;flex-direction:column;gap:7px}
+.flight-spec-grid small{font-size:8px;color:#87949a;letter-spacing:.7px}
+.flight-spec-grid b{font-size:10px;font-weight:600;color:#304b5a}
+.admin-route-actions{display:flex;gap:6px;justify-content:flex-end}
+.admin-route-actions .outline-button{padding:8px 10px}
+.route-days{grid-column:1/-1;border:1px solid #dfe5e2;padding:11px;display:flex;gap:16px;flex-wrap:wrap}
+.route-days legend{font-size:9px;color:#6b7b84}
+.route-days label{display:flex;align-items:center;gap:5px;font-size:10px}
+.route-days input{height:auto}
+.admin-route-actions{grid-column:1/-1;justify-content:flex-start}
+@media(max-width:760px){.flight-spec-grid{grid-template-columns:1fr 1fr}.admin-route-actions{flex-wrap:wrap}}
+/* Admin search controls */
+.admin-flight-filters{display:flex;gap:12px;align-items:end;margin:10px 0 15px}
+.admin-search{display:flex;flex-direction:column;gap:6px;color:#63757b;font-size:8px;font-weight:700;min-width:220px}
+.admin-search input,.admin-filter select{height:36px;padding:0 9px;border:1px solid #dfe5e2;background:#fff;color:#2e4759;font-size:10px}
+.admin-filter{display:flex;align-items:center;gap:8px;color:#63757b;font-size:9px}
+.admin-flight-form .admin-route-actions{align-items:center}
+.admin-metrics{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.admin-route-actions .cancel-button{white-space:nowrap}
+@media(max-width:760px){.admin-flight-filters{align-items:stretch;flex-direction:column}.admin-search{min-width:0}.date-strip a{min-width:75px}}

@@ -26,15 +26,15 @@ class FlightServiceTest {
     @InjectMocks FlightService service;
 
     @Test
-    void appliesOneSidedAirportFiltersAndExcludesInactiveFlights() {
+    void appliesOneSidedAirportFiltersAndIncludesDelayedCustomerStatus() {
         Flight delToBom = flight("a", "DEL", "BOM", "SCHEDULED");
         Flight bomToBlr = flight("b", "BOM", "BLR", "SCHEDULED");
         Flight delayed = flight("c", "DEL", "BLR", "DELAYED");
         when(repository.findAll()).thenReturn(List.of(delToBom, bomToBlr, delayed));
 
-        assertEquals(List.of(delToBom), service.search("DEL", null, null, null, null, null, null, null));
-        assertEquals(List.of(bomToBlr), service.search(null, "BLR", null, null, null, null, null, null));
-        assertEquals(List.of(delToBom, bomToBlr), service.search(null, null,
+        assertEquals(List.of(delToBom, delayed), service.search("DEL", null, null, null, null, null, null, null));
+        assertEquals(List.of(bomToBlr, delayed), service.search(null, "BLR", null, null, null, null, null, null));
+        assertEquals(List.of(delToBom, bomToBlr, delayed), service.search(null, null,
                 java.time.LocalDate.of(2030, 1, 1), null, null, null, null, null));
     }
 

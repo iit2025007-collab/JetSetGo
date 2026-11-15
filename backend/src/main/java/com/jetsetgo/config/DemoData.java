@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,25 +14,25 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.jetsetgo.domain.AppUser;
 import com.jetsetgo.domain.Airport;
 import com.jetsetgo.domain.Flight;
-import com.jetsetgo.domain.SeatInventory;
+import com.jetsetgo.domain.RouteTemplate;
 import com.jetsetgo.repository.AirportRepository;
 import com.jetsetgo.repository.FlightRepository;
+import com.jetsetgo.repository.RouteTemplateRepository;
 import com.jetsetgo.repository.UserRepository;
 import com.jetsetgo.service.AirportDatasetImporter;
+import com.jetsetgo.service.RollingFlightScheduleGenerator;
 
 @Configuration
 public class DemoData {
     @Bean
-    ApplicationRunner seedFlights(FlightRepository flights, MongoTemplate mongo,
-                                  AirportRepository airports, UserRepository users,
+    ApplicationRunner seedFlights(FlightRepository flights, AirportRepository airports,
+                                  RouteTemplateRepository routeTemplates,
+                                  RollingFlightScheduleGenerator scheduleGenerator, UserRepository users,
                                   AirportDatasetImporter airportDatasetImporter,
                                   PasswordEncoder passwords,
                                   @Value("${app.seed-demo-data:false}") boolean seedDemoData,
@@ -44,6 +43,8 @@ public class DemoData {
             }
             if (seedDemoData) {
                 seedCuratedAirports(airports);
+                seedRouteTemplates(routeTemplates);
+                scheduleGenerator.generateRollingWindow();
                 List<Flight> samples = List.of(
                         flight("air-india-101", "Air India", "AI 101", "DEL", "New Delhi", "BOM", "Mumbai",
                                 "Asia/Kolkata", "Asia/Kolkata", 2, LocalTime.of(9, 15), LocalTime.of(11, 25), "6499"),
@@ -102,22 +103,6 @@ public class DemoData {
                 if (!missingFlights.isEmpty()) {
                     flights.saveAll(missingFlights);
                 }
-                List<SeatInventory> seats = new ArrayList<>();
-                for (Flight flight : samples) {
-                    if (mongo.exists(Query.query(Criteria.where("flightId").is(flight.id())), SeatInventory.class)) {
-                        continue;
-                    }
-                    for (int row = 1; row <= 8; row++) {
-                        for (char column = 'A'; column <= 'F'; column++) {
-                            String number = row + String.valueOf(column);
-                            seats.add(new SeatInventory(SeatInventory.idFor(flight.id(), number),
-                                    flight.id(), number, true));
-                        }
-                    }
-                }
-                if (!seats.isEmpty()) {
-                    mongo.insertAll(seats);
-                }
             }
             String adminEmail = System.getenv("DEMO_ADMIN_EMAIL");
             String adminPassword = System.getenv("DEMO_ADMIN_PASSWORD");
@@ -144,6 +129,7 @@ public class DemoData {
                         airport("GOX", "Goa", "Manohar International Airport", "Goa", "India", "IN", "Asia/Kolkata"),
                         airport("PNQ", "Pune", "Pune Airport", "Maharashtra", "India", "IN", "Asia/Kolkata"),
                         airport("DXB", "Dubai", "Dubai International Airport", "Dubai", "United Arab Emirates", "AE", "Asia/Dubai"),
+                        airport("AUH", "Abu Dhabi", "Zayed International Airport", "Abu Dhabi", "United Arab Emirates", "AE", "Asia/Dubai"),
                         airport("SIN", "Singapore", "Singapore Changi Airport", "Singapore", "Singapore", "SG", "Asia/Singapore"),
                         airport("LHR", "London", "Heathrow Airport", "England", "United Kingdom", "GB", "Europe/London"),
                         airport("LGW", "London", "Gatwick Airport", "England", "United Kingdom", "GB", "Europe/London"),
@@ -153,7 +139,18 @@ public class DemoData {
                         airport("LAX", "Los Angeles", "Los Angeles International Airport", "California", "United States", "US", "America/Los_Angeles"),
                         airport("NRT", "Tokyo", "Narita International Airport", "Chiba", "Japan", "JP", "Asia/Tokyo"),
                         airport("HND", "Tokyo", "Tokyo Haneda Airport", "Tokyo", "Japan", "JP", "Asia/Tokyo"),
-                        airport("KUL", "Kuala Lumpur", "Kuala Lumpur International Airport", "Selangor", "Malaysia", "MY", "Asia/Kuala_Lumpur"));
+                        airport("KUL", "Kuala Lumpur", "Kuala Lumpur International Airport", "Selangor", "Malaysia", "MY", "Asia/Kuala_Lumpur"),
+                        airport("AMD", "Ahmedabad", "Sardar Vallabhbhai Patel International Airport", "Gujarat", "India", "IN", "Asia/Kolkata"),
+                        airport("JAI", "Jaipur", "Jaipur International Airport", "Rajasthan", "India", "IN", "Asia/Kolkata"),
+                        airport("COK", "Kochi", "Cochin International Airport", "Kerala", "India", "IN", "Asia/Kolkata"),
+                        airport("BBI", "Bhubaneswar", "Biju Patnaik International Airport", "Odisha", "India", "IN", "Asia/Kolkata"),
+                        airport("PAT", "Patna", "Jay Prakash Narayan Airport", "Bihar", "India", "IN", "Asia/Kolkata"),
+                        airport("VNS", "Varanasi", "Lal Bahadur Shastri International Airport", "Uttar Pradesh", "India", "IN", "Asia/Kolkata"),
+                        airport("IXC", "Chandigarh", "Shaheed Bhagat Singh International Airport", "Chandigarh", "India", "IN", "Asia/Kolkata"),
+                        airport("IXD", "Allahabad", "Prayagraj Airport", "Uttar Pradesh", "India", "IN", "Asia/Kolkata"),
+                        airport("BKK", "Bangkok", "Suvarnabhumi Airport", "Bangkok", "Thailand", "TH", "Asia/Bangkok"),
+                        airport("DOH", "Doha", "Hamad International Airport", "Doha", "Qatar", "QA", "Asia/Qatar"),
+                        airport("CDG", "Paris", "Charles de Gaulle Airport", "Île-de-France", "France", "FR", "Europe/Paris"));
         Map<String, Airport> existing = new HashMap<>();
         airports.findAllById(curated.stream().map(Airport::code).toList())
                 .forEach(airport -> existing.put(airport.code(), airport));
@@ -168,6 +165,74 @@ public class DemoData {
             airports.saveAll(missingOrIncomplete);
         }
         return missingOrIncomplete;
+    }
+
+    static List<RouteTemplate> seedRouteTemplates(RouteTemplateRepository templates) {
+        List<Integer> daily = List.of(1, 2, 3, 4, 5, 6, 7);
+        List<RouteTemplate> configured = List.of(
+                route("demo-del-bom", "JG 101", "DEL", "Delhi", "BOM", "Mumbai", "09:15", 130, "Asia/Kolkata", "Asia/Kolkata", "6499", daily),
+                route("demo-bom-del", "JG 102", "BOM", "Mumbai", "DEL", "Delhi", "20:00", 135, "Asia/Kolkata", "Asia/Kolkata", "6799", daily),
+                route("demo-lko-hyd", "JG 201", "LKO", "Lucknow", "HYD", "Hyderabad", "08:20", 125, "Asia/Kolkata", "Asia/Kolkata", "5899", daily),
+                route("demo-hyd-lko", "JG 202", "HYD", "Hyderabad", "LKO", "Lucknow", "14:00", 125, "Asia/Kolkata", "Asia/Kolkata", "5999", daily),
+                route("demo-blr-maa", "JG 301", "BLR", "Bengaluru", "MAA", "Chennai", "11:00", 65, "Asia/Kolkata", "Asia/Kolkata", "3799", daily),
+                route("demo-maa-blr", "JG 302", "MAA", "Chennai", "BLR", "Bengaluru", "16:00", 65, "Asia/Kolkata", "Asia/Kolkata", "3899", daily),
+                route("demo-ccu-gau", "JG 401", "CCU", "Kolkata", "GAU", "Guwahati", "09:45", 70, "Asia/Kolkata", "Asia/Kolkata", "4299", daily),
+                route("demo-gau-ccu", "JG 402", "GAU", "Guwahati", "CCU", "Kolkata", "12:00", 70, "Asia/Kolkata", "Asia/Kolkata", "4399", daily),
+                route("demo-del-ixd", "JG 501", "DEL", "Delhi", "IXD", "Prayagraj", "07:30", 80, "Asia/Kolkata", "Asia/Kolkata", "3999", daily),
+                route("demo-amd-jai", "JG 601", "AMD", "Ahmedabad", "JAI", "Jaipur", "10:00", 95, "Asia/Kolkata", "Asia/Kolkata", "4499", daily),
+                route("demo-jai-amd", "JG 602", "JAI", "Jaipur", "AMD", "Ahmedabad", "17:00", 95, "Asia/Kolkata", "Asia/Kolkata", "4599", daily),
+                route("demo-cok-bbi", "JG 701", "COK", "Kochi", "BBI", "Bhubaneswar", "08:00", 145, "Asia/Kolkata", "Asia/Kolkata", "6299", daily),
+                route("demo-bbi-cok", "JG 702", "BBI", "Bhubaneswar", "COK", "Kochi", "15:30", 145, "Asia/Kolkata", "Asia/Kolkata", "6399", daily),
+                route("demo-pat-vns", "JG 801", "PAT", "Patna", "VNS", "Varanasi", "09:30", 60, "Asia/Kolkata", "Asia/Kolkata", "3299", daily),
+                route("demo-vns-pat", "JG 802", "VNS", "Varanasi", "PAT", "Patna", "13:00", 60, "Asia/Kolkata", "Asia/Kolkata", "3399", daily),
+                route("demo-ixc-del", "JG 901", "IXC", "Chandigarh", "DEL", "Delhi", "07:00", 55, "Asia/Kolkata", "Asia/Kolkata", "2999", daily),
+                route("demo-pnq-goi", "JG 1001", "PNQ", "Pune", "GOI", "Goa", "10:00", 65, "Asia/Kolkata", "Asia/Kolkata", "3199", daily),
+                route("demo-goi-pnq", "JG 1002", "GOI", "Goa", "PNQ", "Pune", "18:00", 65, "Asia/Kolkata", "Asia/Kolkata", "3299", daily),
+                route("demo-gox-hyd", "JG 1003", "GOX", "Goa", "HYD", "Hyderabad", "12:00", 75, "Asia/Kolkata", "Asia/Kolkata", "3499", daily),
+                route("demo-hyd-gox", "JG 1004", "HYD", "Hyderabad", "GOX", "Goa", "19:00", 75, "Asia/Kolkata", "Asia/Kolkata", "3599", daily),
+                route("demo-del-dxb", "JG 1101", "DEL", "Delhi", "DXB", "Dubai", "22:30", 225, "Asia/Kolkata", "Asia/Dubai", "17999", daily),
+                route("demo-dxb-del", "JG 1102", "DXB", "Dubai", "DEL", "Delhi", "13:30", 210, "Asia/Dubai", "Asia/Kolkata", "18499", daily),
+                route("demo-bom-lhr", "JG 1201", "BOM", "Mumbai", "LHR", "London", "02:15", 555, "Asia/Kolkata", "Europe/London", "42999", daily),
+                route("demo-lhr-bom", "JG 1202", "LHR", "London", "BOM", "Mumbai", "09:00", 540, "Europe/London", "Asia/Kolkata", "43999", daily),
+                route("demo-maa-sin", "JG 1301", "MAA", "Chennai", "SIN", "Singapore", "23:30", 250, "Asia/Kolkata", "Asia/Singapore", "15999", daily),
+                route("demo-sin-maa", "JG 1302", "SIN", "Singapore", "MAA", "Chennai", "20:00", 240, "Asia/Singapore", "Asia/Kolkata", "16499", daily),
+                route("demo-blr-hnd", "JG 1401", "BLR", "Bengaluru", "HND", "Tokyo", "00:30", 525, "Asia/Kolkata", "Asia/Tokyo", "34999", daily),
+                route("demo-hnd-blr", "JG 1402", "HND", "Tokyo", "BLR", "Bengaluru", "10:00", 510, "Asia/Tokyo", "Asia/Kolkata", "35499", daily),
+                route("demo-del-auh", "JG 1501", "DEL", "Delhi", "AUH", "Abu Dhabi", "21:45", 215, "Asia/Kolkata", "Asia/Dubai", "16999", daily),
+                route("demo-auh-del", "JG 1502", "AUH", "Abu Dhabi", "DEL", "Delhi", "12:30", 205, "Asia/Dubai", "Asia/Kolkata", "17499", daily),
+                route("demo-bom-doh", "JG 1601", "BOM", "Mumbai", "DOH", "Doha", "22:00", 225, "Asia/Kolkata", "Asia/Qatar", "15999", daily),
+                route("demo-doh-bom", "JG 1602", "DOH", "Doha", "BOM", "Mumbai", "14:00", 220, "Asia/Qatar", "Asia/Kolkata", "16499", daily),
+                route("demo-del-cdg", "JG 1701", "DEL", "Delhi", "CDG", "Paris", "01:00", 535, "Asia/Kolkata", "Europe/Paris", "38999", daily),
+                route("demo-cdg-del", "JG 1702", "CDG", "Paris", "DEL", "Delhi", "11:00", 520, "Europe/Paris", "Asia/Kolkata", "39499", daily),
+                route("demo-bom-bkk", "JG 1801", "BOM", "Mumbai", "BKK", "Bangkok", "23:00", 255, "Asia/Kolkata", "Asia/Bangkok", "13999", daily),
+                route("demo-bkk-bom", "JG 1802", "BKK", "Bangkok", "BOM", "Mumbai", "18:00", 250, "Asia/Bangkok", "Asia/Kolkata", "14499", daily),
+                route("demo-bom-kul", "JG 1851", "BOM", "Mumbai", "KUL", "Kuala Lumpur", "22:15", 300, "Asia/Kolkata", "Asia/Kuala_Lumpur", "14999", daily),
+                route("demo-kul-bom", "JG 1852", "KUL", "Kuala Lumpur", "BOM", "Mumbai", "17:00", 295, "Asia/Kuala_Lumpur", "Asia/Kolkata", "15499", daily),
+                route("demo-blr-nrt", "JG 1861", "BLR", "Bengaluru", "NRT", "Tokyo", "00:45", 530, "Asia/Kolkata", "Asia/Tokyo", "35999", daily),
+                route("demo-nrt-blr", "JG 1862", "NRT", "Tokyo", "BLR", "Bengaluru", "10:30", 515, "Asia/Tokyo", "Asia/Kolkata", "36499", daily),
+                route("demo-jfk-lax", "JG 1901", "JFK", "New York", "LAX", "Los Angeles", "08:30", 380, "America/New_York", "America/Los_Angeles", "28999", daily),
+                route("demo-lax-jfk", "JG 1902", "LAX", "Los Angeles", "JFK", "New York", "15:00", 320, "America/Los_Angeles", "America/New_York", "29499", daily));
+        List<String> ids = configured.stream().map(RouteTemplate::id).toList();
+        java.util.Set<String> existing = templates.findAllById(ids).stream()
+                .map(RouteTemplate::id).collect(java.util.stream.Collectors.toSet());
+        List<RouteTemplate> missing = configured.stream()
+                .filter(template -> !existing.contains(template.id())).toList();
+        if (!missing.isEmpty()) {
+            templates.saveAll(missing);
+        }
+        return missing;
+    }
+
+    private static RouteTemplate route(String id, String flightNumber,
+                                       String originCode, String originCity,
+                                       String destinationCode, String destinationCity,
+                                       String departureLocalTime, int durationMinutes,
+                                       String originTimeZone, String destinationTimeZone,
+                                       String baseFare, List<Integer> operatingDays) {
+        return new RouteTemplate(id, "JetSetGo Demonstration Air", flightNumber, originCode, originCity,
+                destinationCode, destinationCity, departureLocalTime, durationMinutes, operatingDays,
+                originTimeZone, destinationTimeZone, new BigDecimal(baseFare), "INR", 48,
+                "Illustrative narrow-body aircraft", true);
     }
 
     private static boolean isBlank(String value) {

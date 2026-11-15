@@ -10,11 +10,11 @@ import com.jetsetgo.domain.Booking.TripDetails;
 public record BookingResponse(String id, String pnr, String flightId, String seatNumber,
                               String passengerName, String passengerEmail, BigDecimal amount,
                               String currency, BookingStatus status, Instant createdAt,
-                              TripDetails tripDetails) {
+                              TripDetails tripDetails, Instant expiresAt) {
     public static BookingResponse from(Booking booking) {
         return new BookingResponse(booking.id(), booking.pnr(), booking.flightId(),
                 booking.seatNumber(), booking.passengerName(), booking.passengerEmail(),
                 booking.amount(), booking.currency(), booking.status(), booking.createdAt(),
-                booking.tripDetails());
+                booking.tripDetails(), booking.expiresAt());
     }
 }

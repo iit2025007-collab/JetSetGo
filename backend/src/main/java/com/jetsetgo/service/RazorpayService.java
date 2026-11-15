@@ -2,6 +2,7 @@ package com.jetsetgo.service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 
@@ -13,6 +14,11 @@ import com.jetsetgo.domain.Booking;
 import com.jetsetgo.domain.BookingStatus;
 import com.jetsetgo.repository.BookingRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -25,21 +31,25 @@ public class RazorpayService {
     private final String paymentMode;
     private final RestClient restClient;
     private final BookingRepository bookings;
+    private final MongoTemplate mongo;
 
     public RazorpayService(@Value("${razorpay.key-id}") String keyId,
                            @Value("${razorpay.key-secret}") String keySecret,
                            @Value("${payment.mode:DEMO}") String paymentMode,
                            RestClient.Builder restClientBuilder,
-                           BookingRepository bookings) {
+                           BookingRepository bookings,
+                           MongoTemplate mongo) {
         this.keyId = keyId;
         this.keySecret = keySecret;
         this.paymentMode = paymentMode.toUpperCase();
         this.restClient = restClientBuilder.baseUrl("https://api.razorpay.com/v1").build();
         this.bookings = bookings;
+        this.mongo = mongo;
     }
 
     public OrderResult createOrder(String userId, String bookingId) {
         Booking booking = ownedBooking(userId, bookingId);
+        ensureNotExpired(booking);
         if (booking.status() != BookingStatus.PENDING_PAYMENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This booking is not awaiting payment");
         }
@@ -85,6 +95,7 @@ public class RazorpayService {
 
     public Booking verify(String userId, String bookingId, String orderId, String paymentId, String signature) {
         Booking booking = ownedBooking(userId, bookingId);
+        ensureNotExpired(booking);
         if (!"RAZORPAY_TEST".equals(paymentMode)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Razorpay signature verification is available only in Razorpay Test Mode");
@@ -98,10 +109,11 @@ public class RazorpayService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment does not match this pending booking");
         }
         requireCredentials();
-        if (!isValidSignature(orderId, paymentId, signature, keySecret)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment signature is invalid");
-        }
+        Booking processing = beginVerification(booking, orderId);
         try {
+            if (!isValidSignature(orderId, paymentId, signature, keySecret)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment signature is invalid");
+            }
             JsonNode payment = restClient.get().uri("/payments/{paymentId}", paymentId)
                     .headers(headers -> headers.setBasicAuth(keyId, keySecret))
                     .retrieve().body(JsonNode.class);
@@ -113,13 +125,46 @@ public class RazorpayService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Razorpay has not confirmed the full payment for this booking");
             }
-        } catch (ResponseStatusException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
+            return bookings.save(processing.confirmed(paymentId));
+        } catch (RuntimeException failure) {
+            restorePending(processing.id(), failure);
+            if (failure instanceof ResponseStatusException) {
+                throw failure;
+            }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Unable to verify the payment status with Razorpay", exception);
+                    "Unable to verify the payment status with Razorpay", failure);
         }
-        return bookings.save(booking.confirmed(paymentId));
+    }
+
+    private Booking beginVerification(Booking booking, String orderId) {
+        Instant now = Instant.now();
+        Criteria unexpired = new Criteria().orOperator(
+                Criteria.where("expiresAt").exists(false),
+                Criteria.where("expiresAt").is(null),
+                Criteria.where("expiresAt").gt(now));
+        Booking processing = mongo.findAndModify(
+                Query.query(new Criteria().andOperator(
+                        Criteria.where("_id").is(booking.id()),
+                        Criteria.where("status").is(BookingStatus.PENDING_PAYMENT),
+                        Criteria.where("razorpayOrderId").is(orderId),
+                        unexpired)),
+                Update.update("status", BookingStatus.PAYMENT_PROCESSING),
+                FindAndModifyOptions.options().returnNew(true), Booking.class);
+        if (processing == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This booking payment is expired or already being processed");
+        }
+        return processing;
+    }
+
+    private void restorePending(String bookingId, RuntimeException failure) {
+        try {
+            mongo.updateFirst(Query.query(Criteria.where("_id").is(bookingId)
+                            .and("status").is(BookingStatus.PAYMENT_PROCESSING)),
+                    Update.update("status", BookingStatus.PENDING_PAYMENT), Booking.class);
+        } catch (RuntimeException restoreFailure) {
+            failure.addSuppressed(restoreFailure);
+        }
     }
 
     public void refund(String paymentId, java.math.BigDecimal amount, String currency) {
@@ -157,6 +202,13 @@ public class RazorpayService {
         return bookings.findById(bookingId)
                 .filter(booking -> booking.userId().equals(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+    }
+
+    private static void ensureNotExpired(Booking booking) {
+        if (booking.expiresAt() != null && !booking.expiresAt().isAfter(java.time.Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This payment reservation has expired. Please create a new booking.");
+        }
     }
 
     private void requireCredentials() {

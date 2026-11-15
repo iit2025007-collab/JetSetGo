@@ -1,0 +1,28 @@
+@startuml
+[*] --> PENDING_PAYMENT : reserve seats / create booking
+
+PENDING_PAYMENT --> PAYMENT_PROCESSING : payment attempt starts
+PAYMENT_PROCESSING --> CONFIRMED : verified payment succeeds
+PAYMENT_PROCESSING --> PENDING_PAYMENT : payment fails / retry allowed
+PENDING_PAYMENT --> EXPIRED : 15-minute hold expires
+PENDING_PAYMENT --> CANCELLING : customer cancels
+CONFIRMED --> CANCELLING : customer cancels
+CANCELLING --> CANCELLED : refund succeeds or payment was pending
+CANCELLING --> CONFIRMED : refund fails
+
+EXPIRED --> [*] : release owned seats
+CANCELLED --> [*] : release owned seats
+CONFIRMED --> [*] : booking retained
+
+note right of PENDING_PAYMENT
+Expiry and payment completion both use an
+atomic status transition. Only the winner
+releases or confirms the reserved seats.
+end note
+
+note right of CANCELLING
+Refund is performed before the booking is
+persisted as cancelled; failed refunds
+restore the prior confirmed state.
+end note
+@enduml

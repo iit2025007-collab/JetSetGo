@@ -54,6 +54,7 @@ public class DemoPaymentService {
         }
 
         Booking booking = ownedBooking(userId, bookingId);
+        ensureNotExpired(booking);
         if (booking.status() != BookingStatus.PENDING_PAYMENT) {
             if (booking.status() == BookingStatus.CONFIRMED && !succeed) {
                 return new PaymentResult(booking, "already-confirmed", "SUCCEEDED");
@@ -101,6 +102,7 @@ public class DemoPaymentService {
     }
 
     private Booking confirmDemoBooking(Booking booking) {
+        ensureNotExpired(booking);
         Booking processing = mongo.findAndModify(
                 Query.query(Criteria.where("_id").is(booking.id())
                         .and("status").is(BookingStatus.PENDING_PAYMENT)),
@@ -116,6 +118,13 @@ public class DemoPaymentService {
         return bookings.findById(bookingId)
                 .filter(booking -> booking.userId().equals(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+    }
+
+    private static void ensureNotExpired(Booking booking) {
+        if (booking.expiresAt() != null && !booking.expiresAt().isAfter(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This payment reservation has expired. Please create a new booking.");
+        }
     }
 
     private void requireDemoMode() {

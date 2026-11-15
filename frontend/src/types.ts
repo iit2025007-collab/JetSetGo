@@ -31,6 +31,11 @@ export type Flight = {
   dataSource: "DEMO" | "LIVE";
   originTimeZone?: string | null;
   destinationTimeZone?: string | null;
+  aircraft?: string | null;
+  originTerminal?: string | null;
+  destinationTerminal?: string | null;
+  routeTemplateId?: string | null;
+  templateDisabled?: boolean | null;
 };
 export type Booking = {
   id: string;
@@ -41,8 +46,9 @@ export type Booking = {
   passengerEmail: string;
   amount: number;
   currency: string;
-  status: "PENDING_PAYMENT" | "PAYMENT_PROCESSING" | "CONFIRMED" | "CANCELLING" | "CANCELLED";
+  status: "PENDING_PAYMENT" | "PAYMENT_PROCESSING" | "CONFIRMED" | "CANCELLING" | "CANCELLED" | "EXPIRED";
   createdAt: string;
+  expiresAt?: string | null;
   tripDetails?: {
     returnFlightId?: string | null;
     seatNumbers: string[];
@@ -63,9 +69,32 @@ export type DemoPaymentResult = {
 };
 export type AdminSummary = {
   totalFlights: number;
+  activeFlights: number;
+  upcomingDepartures: number;
   totalBookings: number;
+  confirmedBookings: number;
   registeredUsers: number;
   confirmedRevenue: number;
   cancelledBookings: number;
+  seatOccupancy: number;
 };
 export type UserSummary = { id: string; name: string; email: string; role: User["role"] };
+export type RouteTemplate = {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  originCode: string;
+  originCity: string;
+  destinationCode: string;
+  destinationCity: string;
+  departureLocalTime: string;
+  durationMinutes: number;
+  operatingDays: number[];
+  originTimeZone: string;
+  destinationTimeZone: string;
+  baseFare: number;
+  currency: string;
+  capacity: number;
+  aircraft?: string | null;
+  active: boolean;
+};

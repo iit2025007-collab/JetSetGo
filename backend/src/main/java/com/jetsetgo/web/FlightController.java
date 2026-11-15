@@ -12,17 +12,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.jetsetgo.domain.Flight;
-import com.jetsetgo.domain.SeatInventory;
-import com.jetsetgo.repository.SeatInventoryRepository;
 import com.jetsetgo.service.FlightService;
+import com.jetsetgo.service.SeatInventoryService;
 
 @RestController
 @RequestMapping("/api")
 public class FlightController {
     private final FlightService flights;
-    private final SeatInventoryRepository seats;
+    private final SeatInventoryService seats;
 
-    public FlightController(FlightService flights, SeatInventoryRepository seats) {
+    public FlightController(FlightService flights, SeatInventoryService seats) {
         this.flights = flights;
         this.seats = seats;
     }
@@ -51,10 +50,9 @@ public class FlightController {
     }
 
     @GetMapping("/flights/{id}/seats")
-    public List<String> availableSeats(@PathVariable String id) {
-        flights.get(id);
-        return seats.findByFlightIdAndAvailableTrueOrderBySeatNumber(id).stream()
-                .map(SeatInventory::seatNumber).toList();
+    public List<String> availableSeats(@PathVariable String id,
+                                       @RequestParam(defaultValue = "ECONOMY") String travelClass) {
+        return seats.availableSeats(flights.get(id), travelClass);
     }
 
     public record Health(String status) {}

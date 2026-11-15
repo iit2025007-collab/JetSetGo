@@ -1,13 +1,11 @@
 package com.jetsetgo.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -27,32 +25,33 @@ import com.jetsetgo.domain.Booking.TripDetails;
 import com.jetsetgo.domain.BookingStatus;
 import com.jetsetgo.domain.Airport;
 import com.jetsetgo.domain.Flight;
-import com.jetsetgo.domain.SeatInventory;
 import com.jetsetgo.repository.BookingRepository;
 import com.jetsetgo.repository.AirportRepository;
 import com.jetsetgo.repository.FlightRepository;
+import com.jetsetgo.service.fare.FarePolicyResolver;
 
 @Service
 public class BookingService {
     private static final int MAX_PASSENGERS = 6;
-    private static final Pattern SEAT_NUMBER = Pattern.compile("[1-9][A-F]");
-    private static final Set<String> TRAVEL_CLASSES =
-            Set.of("ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST");
+    private static final Pattern SEAT_NUMBER = Pattern.compile("[1-9][0-9]?[A-F]");
     private final BookingRepository bookings;
     private final FlightRepository flights;
     private final AirportRepository airports;
     private final MongoTemplate mongo;
-    private final RazorpayService razorpay;
-    private final DemoPaymentService demoPayments;
+    private final PaymentProcessor payments;
+    private final SeatInventoryService seatInventory;
+    private final FarePolicyResolver farePolicies;
 
     public BookingService(BookingRepository bookings, FlightRepository flights, AirportRepository airports,
-                         MongoTemplate mongo, RazorpayService razorpay, DemoPaymentService demoPayments) {
+                         MongoTemplate mongo, PaymentProcessor payments,
+                         SeatInventoryService seatInventory, FarePolicyResolver farePolicies) {
         this.bookings = bookings;
         this.flights = flights;
         this.airports = airports;
         this.mongo = mongo;
-        this.razorpay = razorpay;
-        this.demoPayments = demoPayments;
+        this.payments = payments;
+        this.seatInventory = seatInventory;
+        this.farePolicies = farePolicies;
     }
 
     public Booking create(String userId, String idempotencyKey, CreateBooking request) {
@@ -109,35 +108,39 @@ public class BookingService {
                     "Outbound and return flights must use the same currency");
         }
 
-        List<String> reservedSeatIds = new ArrayList<>();
+        String bookingId = UUID.randomUUID().toString();
+        List<ReservedSeat> reservedSeats = new ArrayList<>();
         try {
-            reserveSeats(flight.id(), seatNumbers, reservedSeatIds);
+            seatInventory.ensureInitialized(flight);
+            reserveSeats(flight.id(), seatNumbers, travelClass, bookingId, reservedSeats);
             if (returnFlight != null) {
-                reserveSeats(returnFlight.id(), returnSeatNumbers, reservedSeatIds);
+                seatInventory.ensureInitialized(returnFlight);
+                reserveSeats(returnFlight.id(), returnSeatNumbers, travelClass, bookingId, reservedSeats);
             }
         } catch (RuntimeException failure) {
-            reservedSeatIds.forEach(this::releaseSeat);
+            releaseSeats(reservedSeats, bookingId);
             throw failure;
         }
 
         BigDecimal baseFare = returnFlight == null ? flight.price()
                 : flight.price().add(returnFlight.price());
-        BigDecimal amount = baseFare.multiply(BigDecimal.valueOf(passengers.size()))
-                .multiply(classMultiplier(travelClass)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal amount = farePolicies.calculate(travelClass, baseFare, passengers.size());
         TripDetails tripDetails = new TripDetails(returnFlight == null ? null : returnFlight.id(),
                 seatNumbers, returnSeatNumbers, travelClass, passengers);
-        Booking booking = new Booking(null, UUID.randomUUID().toString().substring(0, 8).toUpperCase(),
+        Instant createdAt = Instant.now();
+        Booking booking = new Booking(bookingId, UUID.randomUUID().toString().substring(0, 8).toUpperCase(),
                 userId, flight.id(), seatNumbers.getFirst(), passengers.getFirst().name(),
                 request.passengerEmail().trim().toLowerCase(), amount, flight.currency(),
-                BookingStatus.PENDING_PAYMENT, null, null, Instant.now(), idempotencyKey, tripDetails);
+                BookingStatus.PENDING_PAYMENT, null, null, createdAt, idempotencyKey, tripDetails,
+                createdAt.plusSeconds(15 * 60L));
         try {
             return bookings.save(booking);
         } catch (DuplicateKeyException duplicate) {
-            reservedSeatIds.forEach(this::releaseSeat);
+            releaseSeats(reservedSeats, bookingId);
             return bookings.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
                     .orElseThrow(() -> duplicate);
         } catch (RuntimeException failure) {
-            reservedSeatIds.forEach(this::releaseSeat);
+            releaseSeats(reservedSeats, bookingId);
             throw failure;
         }
     }
@@ -177,11 +180,7 @@ public class BookingService {
         }
         if (originalStatus == BookingStatus.CONFIRMED) {
             try {
-                if (booking.razorpayPaymentId() != null) {
-                    razorpay.refund(booking.razorpayPaymentId(), booking.amount(), booking.currency());
-                } else {
-                    demoPayments.refund(booking.id());
-                }
+                payments.refund(booking);
             } catch (RuntimeException failure) {
                 mongo.updateFirst(Query.query(Criteria.where("_id").is(booking.id())
                                 .and("status").is(BookingStatus.CANCELLING)),
@@ -192,33 +191,26 @@ public class BookingService {
         Booking cancelled = bookings.save(cancelling.cancelled());
         List<String> outboundSeats = booking.tripDetails() == null || booking.tripDetails().seatNumbers().isEmpty()
                 ? List.of(booking.seatNumber()) : booking.tripDetails().seatNumbers();
-        outboundSeats.forEach(seat -> releaseSeat(SeatInventory.idFor(booking.flightId(), seat)));
+        outboundSeats.forEach(seat -> seatInventory.release(booking.flightId(), seat, booking.id()));
         if (returnFlight != null) {
             booking.tripDetails().returnSeatNumbers().forEach(seat ->
-                    releaseSeat(SeatInventory.idFor(returnFlight.id(), seat)));
+                    seatInventory.release(returnFlight.id(), seat, booking.id()));
         }
         return cancelled;
     }
 
     private void ensureBookable(Flight flight) {
-        if (!"SCHEDULED".equals(flight.status()) || !flight.departure().isAfter(Instant.now())) {
+        if (!"SCHEDULED".equals(flight.status()) || Boolean.TRUE.equals(flight.templateDisabled())
+                || !flight.departure().isAfter(Instant.now())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This flight is not available for booking");
         }
     }
 
-    private void reserveSeats(String flightId, List<String> seats, List<String> reservedSeatIds) {
+    private void reserveSeats(String flightId, List<String> seats, String travelClass,
+                              String reservationId, List<ReservedSeat> reservedSeats) {
         for (String seat : seats) {
-            String seatId = SeatInventory.idFor(flightId, seat);
-            SeatInventory reserved = mongo.findAndModify(
-                    Query.query(Criteria.where("_id").is(seatId).and("available").is(true)),
-                    Update.update("available", false),
-                    FindAndModifyOptions.options().returnNew(true),
-                    SeatInventory.class);
-            if (reserved == null) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Seat " + seat + " is no longer available");
-            }
-            reservedSeatIds.add(seatId);
+            seatInventory.reserve(flightId, seat, travelClass, reservationId);
+            reservedSeats.add(new ReservedSeat(flightId, seat));
         }
     }
 
@@ -253,19 +245,8 @@ public class BookingService {
     private String normalizeTravelClass(String travelClass) {
         String normalized = travelClass == null || travelClass.isBlank()
                 ? "ECONOMY" : travelClass.trim().toUpperCase(Locale.ROOT);
-        if (!TRAVEL_CLASSES.contains(normalized)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported travel class");
-        }
+        farePolicies.resolve(normalized);
         return normalized;
-    }
-
-    private BigDecimal classMultiplier(String travelClass) {
-        return switch (travelClass) {
-            case "PREMIUM_ECONOMY" -> new BigDecimal("1.5");
-            case "BUSINESS" -> new BigDecimal("2.5");
-            case "FIRST" -> new BigDecimal("4");
-            default -> BigDecimal.ONE;
-        };
     }
 
     private boolean isInternational(Flight flight) {
@@ -291,10 +272,11 @@ public class BookingService {
         }
     }
 
-    private void releaseSeat(String seatId) {
-        mongo.updateFirst(Query.query(Criteria.where("_id").is(seatId)),
-                Update.update("available", true), SeatInventory.class);
+    private void releaseSeats(List<ReservedSeat> seats, String reservationId) {
+        seats.forEach(seat -> seatInventory.release(seat.flightId(), seat.seatNumber(), reservationId));
     }
+
+    private record ReservedSeat(String flightId, String seatNumber) {}
 
     public record CreateBooking(String flightId, String seatNumber,
                                 String passengerName, String passengerEmail, String returnFlightId,

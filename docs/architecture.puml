@@ -15,7 +15,21 @@ package "Use cases" {
   class AuthService
   class FlightService
   class BookingService
+  class RouteTemplateService
+  interface FlightScheduleGenerator
+  class RollingFlightScheduleGenerator
+  class SeatInventoryService
+  interface FarePolicy
+  abstract class AbstractFarePolicy
+  class EconomyFarePolicy
+  class PremiumEconomyFarePolicy
+  class BusinessFarePolicy
+  class FirstClassFarePolicy
+  class FarePolicyResolver
+  interface PaymentProcessor
+  class PaymentProcessorFacade
   class RazorpayService
+  class BookingExpiryService
 }
 
 package "Persistence (MongoDB)" {
@@ -23,33 +37,62 @@ package "Persistence (MongoDB)" {
   interface FlightRepository
   interface BookingRepository
   interface SeatInventoryRepository
+  interface RouteTemplateRepository
   class AppUser
   class Flight
   class Booking
   class SeatInventory
+  class RouteTemplate
 }
 
 AuthController --> AuthService
 FlightController --> FlightService
 FlightController --> SeatInventoryRepository
 BookingController --> BookingService
-PaymentController --> RazorpayService
+PaymentController --> PaymentProcessor
 AuthService --> UserRepository
 BookingService --> BookingRepository
 BookingService --> FlightRepository
-BookingService --> RazorpayService
-BookingService --> SeatInventory : atomic update via MongoTemplate
+BookingService --> PaymentProcessor
+BookingService --> SeatInventoryService
+BookingService --> FarePolicyResolver
+FarePolicyResolver --> FarePolicy
+AbstractFarePolicy ..|> FarePolicy
+EconomyFarePolicy --|> AbstractFarePolicy
+PremiumEconomyFarePolicy --|> AbstractFarePolicy
+BusinessFarePolicy --|> AbstractFarePolicy
+FirstClassFarePolicy --|> AbstractFarePolicy
+SeatInventoryService --> SeatInventoryRepository
+SeatInventoryService ..> SeatInventory : atomic MongoTemplate update
+RouteTemplateService --> RouteTemplateRepository
+RouteTemplateService --> FlightScheduleGenerator
+RollingFlightScheduleGenerator ..|> FlightScheduleGenerator
+RollingFlightScheduleGenerator --> RouteTemplateRepository
+RollingFlightScheduleGenerator ..> Flight : stable templateId:date upsert
+PaymentProcessorFacade ..|> PaymentProcessor
+PaymentProcessorFacade --> RazorpayService
+PaymentProcessorFacade --> DemoPaymentService
+BookingExpiryService --> BookingRepository
+BookingExpiryService --> SeatInventoryService
 RazorpayService --> BookingRepository
 UserRepository ..> AppUser
 FlightRepository ..> Flight
 BookingRepository ..> Booking
 SeatInventoryRepository ..> SeatInventory
+RouteTemplateRepository ..> RouteTemplate
 Booking --> Flight : flightId
 Booking --> AppUser : userId
+RouteTemplate ..> Flight : recurring instances
 
 note right of BookingService
 Reserves seats with one atomic
 findAndModify update. An idempotency
 index protects repeat requests.
+end note
+
+note bottom of RollingFlightScheduleGenerator
+Stores schedules for a rolling window.
+Stable IDs and setOnInsert preserve
+existing status and reservation data.
 end note
 @enduml
