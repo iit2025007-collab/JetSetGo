@@ -18,7 +18,7 @@ services:
       - key: IMPORT_AIRPORT_DATA
         value: "true"
       - key: PAYMENT_MODE
-        value: DEMO
+        value: RAZORPAY_TEST
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
