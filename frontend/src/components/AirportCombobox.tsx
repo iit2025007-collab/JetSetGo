@@ -22,8 +22,10 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setLoading(true);
+    setError("");
+    setResults([]);
     const timeout = window.setTimeout(() => {
-      setLoading(true);
       api.airports(query, countryCode).then((items) => {
         if (active) { setResults(items.filter((airport) => airport.code !== excludeCode)); setError(""); }
       }).catch((failure: Error) => {
@@ -87,7 +89,7 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
       />
       {selected && <small className="airport-picked">{selected.name}</small>}
       {!selected && !query && <small className="airport-hint">Search by city, airport name, or IATA code</small>}
-      {open && (results.length > 0 || loading || error) && (
+      {open && (
         <div className="airport-options" id={listId} role="listbox" aria-label={`${label} airport suggestions`}>
           {results.map((airport, index) => (
             <button
@@ -114,8 +116,8 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
               <strong>{airport.code}</strong>
             </button>
           ))}
-          {loading && <div className="airport-message">Searching airports…</div>}
-          {!loading && !error && results.length === 0 && <div className="airport-message">No matching airports.</div>}
+          {loading && <div className="airport-message" role="status">Searching airports…</div>}
+          {!loading && !error && results.length === 0 && <div className="airport-message" role="status">No matching airports.</div>}
           {error && <div className="airport-message airport-error" role="status">Airport search is unavailable. Check your connection.</div>}
         </div>
       )}

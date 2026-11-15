@@ -34,6 +34,7 @@ class AirportDatasetImporterTest {
             assertEquals("Sample, International Airport", airports.get("ABC").name());
             assertEquals("California", airports.get("ABC").stateOrRegion());
             assertEquals("United States", airports.get("ABC").country());
+            assertEquals("US", airports.get("ABC").countryCode());
             assertTrue(airports.get("ABC").scheduledService());
             assertFalse(airports.get("DEF").scheduledService());
             assertEquals("OURAIRPORTS", airports.get("DEF").dataSource());

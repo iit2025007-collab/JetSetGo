@@ -44,6 +44,11 @@ public class FlightController {
         return flights.search(from, to, date, sort, mode, countryCode, airline, maxPrice);
     }
 
+    @GetMapping("/flights/featured")
+    public List<Flight> featured() {
+        return flights.featuredDemoFlights();
+    }
+
     @GetMapping("/flights/{id}")
     public Flight get(@PathVariable String id) {
         return flights.get(id);

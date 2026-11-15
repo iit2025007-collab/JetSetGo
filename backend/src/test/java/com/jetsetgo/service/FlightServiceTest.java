@@ -1,13 +1,17 @@
 package com.jetsetgo.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
+import java.util.stream.IntStream;
 
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -76,6 +80,27 @@ class FlightServiceTest {
 
         assertEquals(List.of(airIndia), service.search(
                 "DEL", "DXB", null, "price", "international", null, "Air India", new BigDecimal("1500")));
+    }
+
+    @Test
+    void generalFlightBrowseIsBoundedToUpcomingResults() {
+        List<Flight> upcoming = IntStream.range(0, 45)
+                .mapToObj(index -> flight("browse-" + index, "DEL", "BOM", "SCHEDULED"))
+                .toList();
+        when(repository.findUpcomingForBrowsing(any(), any(), any(Pageable.class))).thenReturn(upcoming);
+
+        List<Flight> results = service.search(null, null, null, "departure", null, null, null, null);
+
+        assertEquals(40, results.size());
+        assertTrue(results.stream().allMatch(flight -> flight.dataSource().equals("DEMO")));
+    }
+
+    @Test
+    void filteredGeneralBrowseDoesNotDiscardFlightsOutsideTheUnfilteredPage() {
+        Flight match = flight("filtered", "DEL", "BOM", "SCHEDULED");
+        when(repository.findAll()).thenReturn(List.of(match));
+
+        assertEquals(List.of(match), service.search(null, null, null, "departure", null, null, "Airline", null));
     }
 
     private static Flight flight(String id, String origin, String destination, String status) {

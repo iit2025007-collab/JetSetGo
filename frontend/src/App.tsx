@@ -203,6 +203,7 @@ function HomePage() {
         </div>
         <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" />
       </section>
+      <DemoFlightsSection />
       <section className="intro-section" id="why-us">
         <div><span className="eyebrow muted"><span className="eyebrow-line" /> A LITTLE MORE HUMAN</span><h2>Travel should feel<br />like <em>the beginning.</em></h2></div>
         <div className="intro-right"><p>From the first search to the final boarding call, we make the details feel easy—so you can focus on the moments waiting at the other end.</p><Link to="/flights" className="text-link">Explore all flights <ArrowUpRight size={16} /></Link></div>
@@ -230,6 +231,43 @@ function HomePage() {
         <article className="value-card value-green"><span className="value-icon"><CircleHelp /></span><span className="value-number">03 / GO</span><h3>Here for<br />the whole trip.</h3><p>Your itinerary and ticket are right where you need them.</p><Link to="/bookings">View my trips <ArrowRight size={16} /></Link></article>
       </section>
     </>
+  );
+}
+
+function DemoFlightsSection() {
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    api.featuredFlights()
+      .then((items) => { if (active) setFlights(items); })
+      .catch((failure: Error) => { if (active) setError(failure.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  return (
+    <section className="demo-flights-section">
+      <div className="demo-flights-heading">
+        <div>
+          <span className="eyebrow muted"><span className="eyebrow-line" /> SAMPLE SCHEDULES · NOT LIVE INVENTORY</span>
+          <h2>Demo flights, ready to explore.</h2>
+        </div>
+        <Link to="/flights" className="text-link">Browse demo flights <ArrowRight size={16} /></Link>
+      </div>
+      <p className="demo-flights-note">These simulated flights and fares are for demonstration only. No real airline inventory is sold.</p>
+      {loading ? <Loading /> : error ? <ErrorNote message={error} /> : flights.length ? (
+        <div className="flight-list">
+          {flights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery="" />)}
+        </div>
+      ) : (
+        <div className="demo-flights-empty">
+          Demo schedules are not available yet. Please try again after the backend finishes initializing.
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -491,8 +529,19 @@ function BookingsPage() {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    Promise.all([api.bookings(), api.flights()]).then(([bookingsData, flightsData]) => { setBookings(bookingsData); setFlights(flightsData); })
-      .catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
+    let active = true;
+    setLoading(true);
+    setError("");
+    api.bookings().then(async (bookingsData) => {
+      const flightIds = [...new Set(bookingsData.flatMap((booking) => [
+        booking.flightId,
+        ...(booking.tripDetails?.returnFlightId ? [booking.tripDetails.returnFlightId] : []),
+      ]))];
+      const flightsData = await Promise.all(flightIds.map((flightId) => api.flight(flightId)));
+      if (active) { setBookings(bookingsData); setFlights(flightsData); }
+    }).catch((e: Error) => { if (active) setError(e.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [refresh]);
   const flightById = useMemo(() => new Map(flights.map((flight) => [flight.id, flight])), [flights]);
   async function cancel(id: string) {

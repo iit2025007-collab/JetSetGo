@@ -41,7 +41,7 @@ public class AirportDatasetImporter {
     private static final String DATASET_URL =
             "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/";
     private static final String IMPORTS_COLLECTION = "airport_dataset_imports";
-    private static final String IMPORT_ID = "ourairports-iata-v1";
+    private static final String IMPORT_ID = "ourairports-iata-v2";
     private static final Pattern IATA_CODE = Pattern.compile("[A-Z]{3}");
     private static final Set<String> AIRPORT_TYPES =
             Set.of("large_airport", "medium_airport", "small_airport");

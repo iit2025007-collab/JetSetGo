@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.math.BigDecimal;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,6 +21,8 @@ import com.jetsetgo.repository.FlightRepository;
 
 @Service
 public class FlightService {
+    private static final List<String> SEARCHABLE_STATUSES = List.of("SCHEDULED", "DELAYED", "CANCELLED");
+    private static final int SEARCH_RESULT_LIMIT = 40;
     private final FlightRepository flights;
     private final AirportRepository airports;
 
@@ -57,6 +60,12 @@ public class FlightService {
         List<Flight> results;
         if (origin != null && !origin.isBlank() && destination != null && !destination.isBlank()) {
             results = flights.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase(origin.trim(), destination.trim());
+        } else if ((origin == null || origin.isBlank()) && (destination == null || destination.isBlank())
+                && date == null && (mode == null || mode.isBlank())
+                && (countryCode == null || countryCode.isBlank())
+                && (airline == null || airline.isBlank()) && maxPrice == null) {
+            results = flights.findUpcomingForBrowsing(Instant.now(), SEARCHABLE_STATUSES,
+                    PageRequest.of(0, SEARCH_RESULT_LIMIT));
         } else {
             results = flights.findAll();
         }
@@ -71,7 +80,7 @@ public class FlightService {
         Instant startOfDay = date == null ? null : date.atStartOfDay(zone).toInstant();
         Instant startOfNextDay = date == null ? null : date.plusDays(1).atStartOfDay(zone).toInstant();
         return results.stream()
-                .filter(flight -> List.of("SCHEDULED", "DELAYED", "CANCELLED").contains(flight.status()))
+                .filter(flight -> SEARCHABLE_STATUSES.contains(flight.status()))
                 .filter(flight -> !Boolean.TRUE.equals(flight.templateDisabled()))
                 .filter(flight -> flight.departure().isAfter(Instant.now()))
                 .filter(flight -> origin == null || origin.isBlank()
@@ -84,7 +93,12 @@ public class FlightService {
                 .filter(flight -> startOfDay == null || (!flight.departure().isBefore(startOfDay)
                         && flight.departure().isBefore(startOfNextDay)))
                 .sorted(order)
+                .limit(SEARCH_RESULT_LIMIT)
                 .toList();
+    }
+
+    public List<Flight> featuredDemoFlights() {
+        return flights.findFeaturedDemoFlights(Instant.now(), PageRequest.of(0, 6));
     }
 
     private Airport airport(String code) {

@@ -1,6 +1,7 @@
 package com.jetsetgo.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,5 +43,6 @@ class AirportServiceTest {
         assertTrue(((Document) filters.get(1)).containsKey("$or"));
         assertTrue(queryObject.toJson().contains("Allahabad"));
         assertTrue(queryObject.toJson().contains("Airport"));
+        assertEquals("IN", ((Document) filters.get(2)).getString("countryCode"));
     }
 }

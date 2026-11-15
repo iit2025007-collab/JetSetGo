@@ -55,6 +55,7 @@ export const api = {
     if (countryCode) params.set("countryCode", countryCode);
     return request<Flight[]>(`/api/flights?${params}`);
   },
+  featuredFlights: () => request<Flight[]>("/api/flights/featured"),
   flight: (id: string) => request<Flight>(`/api/flights/${id}`),
   seats: (id: string, travelClass = "ECONOMY") =>
     request<string[]>(`/api/flights/${id}/seats?travelClass=${encodeURIComponent(travelClass)}`),

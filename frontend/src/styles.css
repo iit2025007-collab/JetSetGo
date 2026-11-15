@@ -94,6 +94,14 @@
 .search-form.has-country{grid-template-columns:minmax(125px,.8fr) minmax(0,1.1fr) 30px minmax(0,1.1fr) minmax(145px,.8fr) auto}
 .country-select select{width:100%;margin-top:5px;border:0;outline:0;background:transparent;color:#142c45;font:600 13px "Manrope",sans-serif}
 .airport-option-copy .airport-service-label{color:#52786f}
+.demo-flights-section{max-width:1200px;margin:0 auto;padding:52px 0 20px}
+.demo-flights-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:12px}
+.demo-flights-heading h2{margin:12px 0 0;font:500 36px/1.1 var(--serif);letter-spacing:-.7px}
+.demo-flights-note{margin:0 0 20px;color:#79868b;font-size:10px;line-height:1.6}
+.demo-flights-empty{background:#fff;border:1px solid var(--line);padding:24px;color:#75828a;font-size:12px}
+.airport-option-copy small{position:static;right:auto;top:auto}
+@media(max-width:1200px){.demo-flights-section{margin:0 6.2vw}}
+@media(max-width:760px){.demo-flights-section{margin:0 6vw;padding:35px 0 12px}.demo-flights-heading{align-items:flex-start;flex-direction:column;gap:12px}.demo-flights-heading h2{font-size:30px}}
 .flight-tools .sort-control input{height:38px;width:95px;padding:0 9px;border:1px solid #dfe4e1;background:#fff;color:#385264;font-size:9px}
 .flight-tools{flex-wrap:wrap}
 .journey-options{display:flex;align-items:end;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #edf0ed}
