@@ -20,7 +20,14 @@ public class AirportController {
     }
 
     @GetMapping
-    public List<Airport> search(@RequestParam(required = false) String q) {
-        return airports.search(q);
+    public List<Airport> search(@RequestParam(required = false) String q,
+                                @RequestParam(required = false) String countryCode,
+                                @RequestParam(defaultValue = "false") boolean scheduledOnly) {
+        return airports.search(q, countryCode, scheduledOnly);
+    }
+
+    @GetMapping("/countries")
+    public List<String> countries() {
+        return airports.countryCodes();
     }
 }

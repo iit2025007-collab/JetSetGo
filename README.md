@@ -5,17 +5,19 @@ Jet Set Go is a full-stack airline booking project built with Java 21 / Spring B
 ## What works
 
 - Customer registration and sign-in with BCrypt-hashed passwords and signed JWTs.
-- Airport autocomplete against curated IATA airport records, with keyboard selection, airport swapping, one-way date search, and sort by departure, fare, or duration.
-- Four internal demonstration flight schedules, visibly identified as demo data and never presented as live inventory/status.
+- A one-time MongoDB import of OurAirports airport, country, and region CSV data, deduplicated/upserted by IATA code. Airport results show region, airport type, and the dataset's scheduled-service flag.
+- Public airport autocomplete with keyboard selection, airport swapping, domestic/international search modes, domestic country selection, and multiple airports per city.
+- One-way and round-trip searches, 1–6 passengers, four demo travel classes, airline/fare filters, seat selection for each traveler and leg, and reverse-route demo flights for the sample itineraries.
+- Twenty-five internal demonstration flight schedules covering the requested India, international, and US domestic routes. Every schedule and booking is clearly identified as demo data, never live inventory/status.
 - Per-seat atomic reservation in MongoDB, plus an idempotency key and unique index to protect booking creation retries.
-- Passenger details, internal Jet Set Go booking references, pending bookings, customer-scoped booking history, and printable itineraries.
+- Passenger details, internal Jet Set Go booking references, pending bookings, customer-scoped booking history, and printable/downloadable demo itineraries.
 - A no-credentials educational payment simulator (no payment details collected) and optional Razorpay Test Mode. Razorpay callbacks are signature-checked and the API confirms captured amount/currency before confirmation.
 - Printable demo itinerary and cancellation. Demo refund state is recorded separately; Razorpay Test Mode cancellations request a refund before freeing the seat.
 - Role-protected admin API/dashboard for demo flight schedules, statuses, users, and booking summaries.
 - Responsive React pages for home, search, flight/seat selection, login/register, checkout, bookings, admin tools, and printable itinerary.
 - GitHub Actions build checks, Docker image for the Java API, and Render/Vercel configuration.
 
-This is a working academic demo, not a production airline reservation platform. It currently does not connect to a live flight-status/inventory API and does not include round trips, online check-in, or customer profile editing. A generated booking reference is internal to Jet Set Go, not a real airline PNR or issued ticket.
+This is a working academic demo, not a production airline reservation platform. It does not connect to a live flight-status/inventory API. All schedules, seats, fares, payments (unless explicitly configured for Razorpay Test Mode), and tickets are simulated. A generated booking reference is internal to Jet Set Go, not a real airline PNR or issued ticket. International demo bookings collect nationality and passport expiry date only; they do not collect passport numbers or validate visa/entry rules.
 
 ## Run locally
 
@@ -23,13 +25,13 @@ Requirements: Java 21, Maven 3.9+, Node.js 22+, npm, and a MongoDB Atlas cluster
 
 1. In MongoDB Atlas, create a database user and cluster. You will need the Java driver connection string the first time you start the backend. The launcher prompts for it with hidden input, so it will not be echoed into the terminal.
 
-2. From the repository root, start the API and seed the airport catalog/demo schedules into empty Atlas collections:
+2. From the repository root, start the API, import the OurAirports catalog once, and seed any missing demo schedules:
 
    ```sh
    ./run-backend.sh
    ```
 
-   The prompt accepts your Atlas connection string without displaying it. Seeding only fills empty airport/flight collections; it does not drop or replace records. The API is at `http://localhost:8080`. Add `DEMO_ADMIN_EMAIL` and `DEMO_ADMIN_PASSWORD` to the process environment before startup to create an admin login; use a strong unique password.
+   The prompt accepts your Atlas connection string without displaying it. The airport import upserts unique IATA codes and records a one-time import marker; it does not drop collections. The demo seeder adds missing sample flight IDs and seats without deleting existing data. The first import needs internet access to OurAirports. The API is at `http://localhost:8080`. Add `DEMO_ADMIN_EMAIL` and `DEMO_ADMIN_PASSWORD` to the process environment before startup to create an admin login; use a strong unique password.
 
    To use Razorpay **Test Mode** instead, set `PAYMENT_MODE=RAZORPAY_TEST`, `RAZORPAY_KEY_ID`, and `RAZORPAY_KEY_SECRET` on the backend only. Never use live credentials for this demo.
 
@@ -53,7 +55,8 @@ Requirements: Java 21, Maven 3.9+, Node.js 22+, npm, and a MongoDB Atlas cluster
 | `JWT_SECRET` | API | Random signing key; use at least 32 bytes and set a unique production value |
 | `JWT_EXPIRATION_HOURS` | API | JWT lifetime; defaults to 24 |
 | `CORS_ORIGINS` | API | Comma-separated exact frontend origins, e.g. `https://your-site.vercel.app` |
-| `SEED_DEMO_DATA` | API | Set to `true` to seed airport and flight demo records only into empty collections |
+| `SEED_DEMO_DATA` | API | `true` adds any missing demo schedules and seats; the local launcher defaults it to `true` |
+| `IMPORT_AIRPORT_DATA` | API | `true` imports OurAirports once into MongoDB; the local launcher defaults it to `true`. Set `false` to disable the startup import |
 | `PAYMENT_MODE` | API | `DEMO` (default; no real money) or `RAZORPAY_TEST` |
 | `RAZORPAY_KEY_ID` | API | Razorpay test key ID; required only in `RAZORPAY_TEST` mode |
 | `RAZORPAY_KEY_SECRET` | API | Razorpay test secret; required only in `RAZORPAY_TEST` mode; never expose to browser |
@@ -69,16 +72,16 @@ Requirements: Java 21, Maven 3.9+, Node.js 22+, npm, and a MongoDB Atlas cluster
 3. In Vercel, import the same GitHub repository and set the project **Root Directory** to `frontend`. Add `VITE_API_URL` as the Render API's base URL, then redeploy (Vite variables are embedded at build time).
 4. Set the API's `CORS_ORIGINS` to the exact Vercel production URL (and any preview URL you intentionally use). If you use Render's optional static frontend instead, set that service's `VITE_API_URL` and allow its URL in `CORS_ORIGINS`.
 5. In MongoDB Atlas, create a database/user and configure Network Access for the Render service. Avoid `0.0.0.0/0` for production; if your Render plan has changing egress IPs, use a private networking option or a restricted allowlist compatible with your plan.
-6. To seed a new Atlas database, temporarily set `SEED_DEMO_DATA=true` in Render and deploy once; after the four demo routes appear, remove the flag. In Razorpay, create test keys and configure allowed checkout origins if your account requires it. Do not enable live payments.
+6. To initialize a new Atlas database, set `IMPORT_AIRPORT_DATA=true` and `SEED_DEMO_DATA=true` in Render and deploy once. The importer runs once per database, identified by its import marker; demo seeding is idempotent. In Razorpay, create test keys and configure allowed checkout origins if your account requires it. Do not enable live payments.
 
 The GitHub repository URL, Render service URL, Vercel domain, Atlas URI, and Razorpay keys are account-specific. They cannot be inferred from this workspace; add them through the respective dashboards and do not paste secret values into chat or source control.
 
 ## API outline
 
 - `POST /api/auth/register`, `POST /api/auth/login`
-- `GET /api/airports?q=del` (seed the Atlas airport collection first)
-- `GET /api/flights?from=DEL&to=BOM&date=YYYY-MM-DD&sort=price`, `GET /api/flights/{id}`, `GET /api/flights/{id}/seats`
-- Authenticated: `POST /api/bookings` (requires `Idempotency-Key`), `GET /api/bookings`, `GET /api/bookings/{id}`, `POST /api/bookings/{id}/cancel`
+- `GET /api/airports?q=del&countryCode=IN`, `GET /api/airports/countries`
+- `GET /api/flights?from=DEL&to=BOM&date=YYYY-MM-DD&mode=domestic&countryCode=IN&sort=price`, `GET /api/flights/{id}`, `GET /api/flights/{id}/seats`
+- Authenticated: `POST /api/bookings` (requires `Idempotency-Key`; supports one-way/round-trip, up to six passengers, seat lists, class, nationality, and document expiry), `GET /api/bookings`, `GET /api/bookings/{id}`, `POST /api/bookings/{id}/cancel`
 - Authenticated: `POST /api/bookings/{id}/payments/order`, Razorpay `POST /api/bookings/{id}/payments/verify`, or demo `POST /api/bookings/{id}/payments/demo/complete`
 - Admin-only: `/api/admin/summary`, `/api/admin/flights`, `/api/admin/bookings`, `/api/admin/users`
 - `GET /api/health`
@@ -101,5 +104,5 @@ The layered monolith separates REST controllers, services/use cases, MongoDB rep
 - Render free services may sleep and have limited resources; use a paid service and managed database for a real deployment.
 - Atlas and Razorpay account setup, billing, network rules, and production compliance remain the project owner's responsibility.
 - `MONGODB_URI` is required; the application does not connect to localhost MongoDB by default. The default JWT key is only a local-development fallback. Always set `JWT_SECRET` in deployment.
-- This project collects passenger name and email only. Do not collect or store card details; Razorpay Checkout handles payment credentials.
+- This project collects passenger names/email, and for international demo bookings, nationality and passport expiry date. It does not collect passport numbers or card details; Razorpay Checkout handles payment credentials.
 - A refund is an external side effect. For production, add Razorpay webhooks and a durable reconciliation process for network failures between refund creation and booking persistence.

@@ -38,17 +38,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  airports: (query = "") => {
+  airports: (query = "", countryCode?: string) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
+    if (countryCode) params.set("countryCode", countryCode);
     return request<Airport[]>(`/api/airports?${params}`);
   },
-  flights: (from?: string, to?: string, date?: string, sort = "departure") => {
+  airportCountries: () => request<string[]>("/api/airports/countries"),
+  flights: (from?: string, to?: string, date?: string, sort = "departure", mode?: string, countryCode?: string) => {
     const params = new URLSearchParams();
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     if (date) params.set("date", date);
     if (sort) params.set("sort", sort);
+    if (mode) params.set("mode", mode);
+    if (countryCode) params.set("countryCode", countryCode);
     return request<Flight[]>(`/api/flights?${params}`);
   },
   flight: (id: string) => request<Flight>(`/api/flights/${id}`),
@@ -57,7 +61,17 @@ export const api = {
     request<Session>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (name: string, email: string, password: string) =>
     request<Session>("/api/auth/register", { method: "POST", body: JSON.stringify({ name, email, password }) }),
-  createBooking: (payload: { flightId: string; seatNumber: string; passengerName: string; passengerEmail: string }, idempotencyKey: string) =>
+  createBooking: (payload: {
+    flightId: string;
+    seatNumber: string;
+    passengerName: string;
+    passengerEmail: string;
+    returnFlightId?: string;
+    seatNumbers: string[];
+    returnSeatNumbers: string[];
+    passengers: Array<{ name: string; nationality?: string; passportExpiryDate?: string }>;
+    travelClass: string;
+  }, idempotencyKey: string) =>
     request<Booking>("/api/bookings", {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },

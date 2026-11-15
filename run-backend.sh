@@ -17,5 +17,6 @@ fi
 
 export PAYMENT_MODE="${PAYMENT_MODE:-DEMO}"
 export SEED_DEMO_DATA="${SEED_DEMO_DATA:-true}"
+export IMPORT_AIRPORT_DATA="${IMPORT_AIRPORT_DATA:-true}"
 
 exec mvn -f "$ROOT_DIR/pom.xml" spring-boot:run

@@ -6,11 +6,12 @@ import type { Airport } from "../types";
 type Props = {
   label: string;
   selected: Airport | null;
+  countryCode?: string;
   excludeCode?: string;
   onChange: (airport: Airport | null) => void;
 };
 
-export default function AirportCombobox({ label, selected, excludeCode, onChange }: Props) {
+export default function AirportCombobox({ label, selected, countryCode, excludeCode, onChange }: Props) {
   const listId = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -23,7 +24,7 @@ export default function AirportCombobox({ label, selected, excludeCode, onChange
     let active = true;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      api.airports(query).then((items) => {
+      api.airports(query, countryCode).then((items) => {
         if (active) { setResults(items.filter((airport) => airport.code !== excludeCode)); setError(""); }
       }).catch((failure: Error) => {
         if (active) setError(failure.message);
@@ -32,7 +33,7 @@ export default function AirportCombobox({ label, selected, excludeCode, onChange
       });
     }, 140);
     return () => { active = false; window.clearTimeout(timeout); };
-  }, [excludeCode, open, query]);
+  }, [countryCode, excludeCode, open, query]);
 
   function choose(airport: Airport) {
     onChange(airport);
@@ -100,7 +101,16 @@ export default function AirportCombobox({ label, selected, excludeCode, onChange
               onClick={() => choose(airport)}
             >
               <span className="airport-option-icon"><MapPin size={14} /></span>
-              <span className="airport-option-copy"><b>{airport.city}</b><small>{airport.name} · {airport.country}</small></span>
+              <span className="airport-option-copy">
+                <b>{airport.city}</b>
+                <small>{airport.name} · {[airport.stateOrRegion, airport.country].filter(Boolean).join(", ")}</small>
+                <small className="airport-service-label">
+                  {airport.airportType ? `${airport.airportType.replace("_", " ")} · ` : ""}
+                  {airport.scheduledService === true ? "Scheduled service listed"
+                    : airport.scheduledService === false ? "No scheduled service listed" : "Service data unavailable"}
+                  {airport.dataSource === "OURAIRPORTS" ? " · OurAirports" : ""}
+                </small>
+              </span>
               <strong>{airport.code}</strong>
             </button>
           ))}

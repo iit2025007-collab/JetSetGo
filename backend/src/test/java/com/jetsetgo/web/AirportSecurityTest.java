@@ -30,14 +30,25 @@ class AirportSecurityTest {
 
     @Test
     void airportSearchIsPublicAndReturnsMatchingAirports() throws Exception {
-        when(airports.search("HY")).thenReturn(List.of(new Airport(
+        when(airports.search("HY", null, false)).thenReturn(List.of(new Airport(
                 "HYD", "Hyderabad", "Rajiv Gandhi International Airport", "India", "Asia/Kolkata")));
 
         mvc.perform(get("/api/airports").param("q", "HY"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].code").value("HYD"));
 
-        verify(airports).search("HY");
+        verify(airports).search("HY", null, false);
+    }
+
+    @Test
+    void airportCountryCatalogIsPublic() throws Exception {
+        when(airports.countryCodes()).thenReturn(List.of("IN", "US"));
+
+        mvc.perform(get("/api/airports/countries"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("IN"));
+
+        verify(airports).countryCodes();
     }
 
     @Test

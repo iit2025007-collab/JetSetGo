@@ -32,9 +32,14 @@ public class BookingController {
     public BookingResponse create(Authentication authentication,
                                    @RequestHeader("Idempotency-Key") @Size(min = 8, max = 100) String key,
                                    @Valid @RequestBody BookingRequest request) {
+        List<BookingService.PassengerInput> passengers = request.passengers() == null ? null
+                : request.passengers().stream().map(passenger -> new BookingService.PassengerInput(
+                        passenger.name(), passenger.nationality(), passenger.passportExpiryDate())).toList();
         return BookingResponse.from(bookings.create(authentication.getName(), key,
                 new BookingService.CreateBooking(request.flightId(), request.seatNumber(),
-                        request.passengerName(), request.passengerEmail())));
+                        request.passengerName(), request.passengerEmail(), request.returnFlightId(),
+                        request.seatNumbers(), request.returnSeatNumbers(), passengers,
+                        request.travelClass())));
     }
 
     @GetMapping
@@ -55,5 +60,14 @@ public class BookingController {
     public record BookingRequest(@NotBlank String flightId,
                                  @NotBlank @Pattern(regexp = "[1-9][A-F]") String seatNumber,
                                  @NotBlank @Size(max = 100) String passengerName,
-                                 @NotBlank @Email @Size(max = 254) String passengerEmail) {}
+                                 @NotBlank @Email @Size(max = 254) String passengerEmail,
+                                 String returnFlightId,
+                                 @Size(max = 6) List<@NotBlank @Pattern(regexp = "[1-9][A-F]") String> seatNumbers,
+                                 @Size(max = 6) List<@NotBlank @Pattern(regexp = "[1-9][A-F]") String> returnSeatNumbers,
+                                 @Size(max = 6) List<@Valid PassengerRequest> passengers,
+                                 String travelClass) {}
+
+    public record PassengerRequest(@NotBlank @Size(max = 100) String name,
+                                   @Size(max = 2) String nationality,
+                                   java.time.LocalDate passportExpiryDate) {}
 }

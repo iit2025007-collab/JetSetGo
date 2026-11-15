@@ -87,7 +87,8 @@ public class AdminService {
         Flight updated = new Flight(flight.id(), flight.airline(), flight.flightNumber(),
                 flight.originCode(), flight.originCity(), flight.destinationCode(),
                 flight.destinationCity(), flight.departure(), flight.arrival(), flight.price(),
-                flight.currency(), flight.capacity(), normalized, flight.dataSource());
+                flight.currency(), flight.capacity(), normalized, flight.dataSource(),
+                flight.originTimeZone(), flight.destinationTimeZone());
         return flights.save(updated);
     }
 
@@ -95,7 +96,10 @@ public class AdminService {
         if (!flights.existsById(flightId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Flight not found");
         }
-        if (bookings.existsByFlightId(flightId)) {
+        if (bookings.existsByFlightId(flightId)
+                || mongo.exists(org.springframework.data.mongodb.core.query.Query.query(
+                        org.springframework.data.mongodb.core.query.Criteria.where("tripDetails.returnFlightId")
+                                .is(flightId)), Booking.class)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A flight with booking history cannot be deleted");
         }

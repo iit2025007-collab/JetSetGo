@@ -1,6 +1,7 @@
 package com.jetsetgo.web;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -36,8 +37,12 @@ public class FlightController {
                                @RequestParam(required = false) String to,
                                @RequestParam(required = false)
                                @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-                               @RequestParam(defaultValue = "departure") String sort) {
-        return flights.search(from, to, date, sort);
+                               @RequestParam(defaultValue = "departure") String sort,
+                               @RequestParam(required = false) String mode,
+                               @RequestParam(required = false) String countryCode,
+                               @RequestParam(required = false) String airline,
+                               @RequestParam(required = false) BigDecimal maxPrice) {
+        return flights.search(from, to, date, sort, mode, countryCode, airline, maxPrice);
     }
 
     @GetMapping("/flights/{id}")
