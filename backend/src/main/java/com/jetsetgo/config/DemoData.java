@@ -7,7 +7,9 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -40,33 +42,8 @@ public class DemoData {
             if (importAirportData) {
                 airportDatasetImporter.importIfNeeded();
             }
-            if (seedDemoData && airports.count() == 0) {
-                airports.saveAll(List.of(
-                        airport("DEL", "Delhi", "Indira Gandhi International Airport", "Delhi", "India", "IN", "Asia/Kolkata"),
-                        airport("BOM", "Mumbai", "Chhatrapati Shivaji Maharaj International Airport", "Maharashtra", "India", "IN", "Asia/Kolkata"),
-                        airport("BLR", "Bengaluru", "Kempegowda International Airport", "Karnataka", "India", "IN", "Asia/Kolkata"),
-                        airport("HYD", "Hyderabad", "Rajiv Gandhi International Airport", "Telangana", "India", "IN", "Asia/Kolkata"),
-                        airport("MAA", "Chennai", "Chennai International Airport", "Tamil Nadu", "India", "IN", "Asia/Kolkata"),
-                        airport("CCU", "Kolkata", "Netaji Subhas Chandra Bose International Airport", "West Bengal", "India", "IN", "Asia/Kolkata"),
-                        airport("LKO", "Lucknow", "Chaudhary Charan Singh International Airport", "Uttar Pradesh", "India", "IN", "Asia/Kolkata"),
-                        airport("GAU", "Guwahati", "Lokpriya Gopinath Bordoloi International Airport", "Assam", "India", "IN", "Asia/Kolkata"),
-                        airport("GOI", "Goa", "Dabolim Airport", "Goa", "India", "IN", "Asia/Kolkata"),
-                        airport("GOX", "Goa", "Manohar International Airport", "Goa", "India", "IN", "Asia/Kolkata"),
-                        airport("PNQ", "Pune", "Pune Airport", "Maharashtra", "India", "IN", "Asia/Kolkata"),
-                        airport("DXB", "Dubai", "Dubai International Airport", "Dubai", "United Arab Emirates", "AE", "Asia/Dubai"),
-                        airport("SIN", "Singapore", "Singapore Changi Airport", "Singapore", "Singapore", "SG", "Asia/Singapore"),
-                        airport("LHR", "London", "Heathrow Airport", "England", "United Kingdom", "GB", "Europe/London"),
-                        airport("LGW", "London", "Gatwick Airport", "England", "United Kingdom", "GB", "Europe/London"),
-                        airport("JFK", "New York", "John F. Kennedy International Airport", "New York", "United States", "US", "America/New_York"),
-                        airport("EWR", "New York", "Newark Liberty International Airport", "New Jersey", "United States", "US", "America/New_York"),
-                        airport("LGA", "New York", "LaGuardia Airport", "New York", "United States", "US", "America/New_York"),
-                        airport("LAX", "Los Angeles", "Los Angeles International Airport", "California", "United States", "US", "America/Los_Angeles"),
-                        airport("NRT", "Tokyo", "Narita International Airport", "Chiba", "Japan", "JP", "Asia/Tokyo"),
-                        airport("HND", "Tokyo", "Tokyo Haneda Airport", "Tokyo", "Japan", "JP", "Asia/Tokyo"),
-                        airport("KUL", "Kuala Lumpur", "Kuala Lumpur International Airport", "Selangor", "Malaysia", "MY", "Asia/Kuala_Lumpur")
-                ));
-            }
             if (seedDemoData) {
+                seedCuratedAirports(airports);
                 List<Flight> samples = List.of(
                         flight("air-india-101", "Air India", "AI 101", "DEL", "New Delhi", "BOM", "Mumbai",
                                 "Asia/Kolkata", "Asia/Kolkata", 2, LocalTime.of(9, 15), LocalTime.of(11, 25), "6499"),
@@ -151,6 +128,50 @@ public class DemoData {
                         passwords.encode(adminPassword), "Jet Set Go Admin", AppUser.Role.ADMIN));
             }
         };
+    }
+
+    static List<Airport> seedCuratedAirports(AirportRepository airports) {
+        List<Airport> curated = List.of(
+                        airport("DEL", "Delhi", "Indira Gandhi International Airport", "Delhi", "India", "IN", "Asia/Kolkata"),
+                        airport("BOM", "Mumbai", "Chhatrapati Shivaji Maharaj International Airport", "Maharashtra", "India", "IN", "Asia/Kolkata"),
+                        airport("BLR", "Bengaluru", "Kempegowda International Airport", "Karnataka", "India", "IN", "Asia/Kolkata"),
+                        airport("HYD", "Hyderabad", "Rajiv Gandhi International Airport", "Telangana", "India", "IN", "Asia/Kolkata"),
+                        airport("MAA", "Chennai", "Chennai International Airport", "Tamil Nadu", "India", "IN", "Asia/Kolkata"),
+                        airport("CCU", "Kolkata", "Netaji Subhas Chandra Bose International Airport", "West Bengal", "India", "IN", "Asia/Kolkata"),
+                        airport("LKO", "Lucknow", "Chaudhary Charan Singh International Airport", "Uttar Pradesh", "India", "IN", "Asia/Kolkata"),
+                        airport("GAU", "Guwahati", "Lokpriya Gopinath Bordoloi International Airport", "Assam", "India", "IN", "Asia/Kolkata"),
+                        airport("GOI", "Goa", "Dabolim Airport", "Goa", "India", "IN", "Asia/Kolkata"),
+                        airport("GOX", "Goa", "Manohar International Airport", "Goa", "India", "IN", "Asia/Kolkata"),
+                        airport("PNQ", "Pune", "Pune Airport", "Maharashtra", "India", "IN", "Asia/Kolkata"),
+                        airport("DXB", "Dubai", "Dubai International Airport", "Dubai", "United Arab Emirates", "AE", "Asia/Dubai"),
+                        airport("SIN", "Singapore", "Singapore Changi Airport", "Singapore", "Singapore", "SG", "Asia/Singapore"),
+                        airport("LHR", "London", "Heathrow Airport", "England", "United Kingdom", "GB", "Europe/London"),
+                        airport("LGW", "London", "Gatwick Airport", "England", "United Kingdom", "GB", "Europe/London"),
+                        airport("JFK", "New York", "John F. Kennedy International Airport", "New York", "United States", "US", "America/New_York"),
+                        airport("EWR", "New York", "Newark Liberty International Airport", "New Jersey", "United States", "US", "America/New_York"),
+                        airport("LGA", "New York", "LaGuardia Airport", "New York", "United States", "US", "America/New_York"),
+                        airport("LAX", "Los Angeles", "Los Angeles International Airport", "California", "United States", "US", "America/Los_Angeles"),
+                        airport("NRT", "Tokyo", "Narita International Airport", "Chiba", "Japan", "JP", "Asia/Tokyo"),
+                        airport("HND", "Tokyo", "Tokyo Haneda Airport", "Tokyo", "Japan", "JP", "Asia/Tokyo"),
+                        airport("KUL", "Kuala Lumpur", "Kuala Lumpur International Airport", "Selangor", "Malaysia", "MY", "Asia/Kuala_Lumpur"));
+        Map<String, Airport> existing = new HashMap<>();
+        airports.findAllById(curated.stream().map(Airport::code).toList())
+                .forEach(airport -> existing.put(airport.code(), airport));
+        List<Airport> missingOrIncomplete = curated.stream()
+                .filter(airport -> {
+                    Airport saved = existing.get(airport.code());
+                    return saved == null || isBlank(saved.countryCode()) || isBlank(saved.country())
+                            || isBlank(saved.dataSource());
+                })
+                .toList();
+        if (!missingOrIncomplete.isEmpty()) {
+            airports.saveAll(missingOrIncomplete);
+        }
+        return missingOrIncomplete;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private static Airport airport(String code, String city, String name, String stateOrRegion,
