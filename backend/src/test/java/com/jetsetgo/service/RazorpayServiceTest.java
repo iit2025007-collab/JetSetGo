@@ -68,7 +68,7 @@ class RazorpayServiceTest {
         when(restClientBuilder.build()).thenReturn(restClient);
         when(mongo.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class),
                 eq(Booking.class))).thenReturn(null);
-        RazorpayService service = new RazorpayService("test-key", "test-secret", "RAZORPAY_TEST",
+        RazorpayService service = new RazorpayService("rzp_test_example", "test-secret", "RAZORPAY_TEST",
                 restClientBuilder, bookings, mongo);
 
         ResponseStatusException failure = assertThrows(ResponseStatusException.class,
@@ -76,5 +76,25 @@ class RazorpayServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
         verify(restClient, never()).get();
+    }
+
+    @Test
+    void refusesLiveKeyIdsInTestModeBeforeCreatingAnOrder() {
+        Booking pending = new Booking("booking", "JSG12345", "user", "flight", "2A",
+                "A Passenger", "passenger@example.com", new BigDecimal("5000"), "INR",
+                BookingStatus.PENDING_PAYMENT, null, null, Instant.now(), "create-key",
+                null, Instant.now().plusSeconds(300));
+        when(bookings.findById("booking")).thenReturn(Optional.of(pending));
+        when(restClientBuilder.baseUrl("https://api.razorpay.com/v1")).thenReturn(restClientBuilder);
+        when(restClientBuilder.build()).thenReturn(restClient);
+        RazorpayService service = new RazorpayService("rzp_live_example", "live-secret", "RAZORPAY_TEST",
+                restClientBuilder, bookings, mongo);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.createOrder("user", "booking"));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, failure.getStatusCode());
+        verify(bookings, never()).save(any(Booking.class));
+        verify(restClient, never()).post();
     }
 }

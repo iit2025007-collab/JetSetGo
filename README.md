@@ -57,7 +57,7 @@ Requirements: Java 21, Maven 3.9+, Node.js 22+, npm, and a MongoDB Atlas cluster
 | `CORS_ORIGINS` | API | Comma-separated exact frontend origins, e.g. `https://your-site.vercel.app` |
 | `SEED_DEMO_DATA` | API | `true` adds any missing demo schedules and seats; the local launcher defaults it to `true` |
 | `IMPORT_AIRPORT_DATA` | API | `true` imports OurAirports once into MongoDB; the local launcher defaults it to `true`. Set `false` to disable the startup import |
-| `PAYMENT_MODE` | API | `DEMO` (default; no real money) or `RAZORPAY_TEST` |
+| `PAYMENT_MODE` | API | `DEMO` (default; no real money) or `RAZORPAY_TEST` (requires an `rzp_test_` key ID) |
 | `RAZORPAY_KEY_ID` | API | Razorpay test key ID; required only in `RAZORPAY_TEST` mode |
 | `RAZORPAY_KEY_SECRET` | API | Razorpay test secret; required only in `RAZORPAY_TEST` mode; never expose to browser |
 | `VITE_API_URL` | Frontend build | Base URL of the deployed API, without a trailing slash |

@@ -216,6 +216,10 @@ public class RazorpayService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Razorpay is not configured. Add test credentials to the server environment.");
         }
+        if (!keyId.startsWith("rzp_test_")) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Razorpay Test Mode requires a test key ID.");
+        }
     }
 
     public record OrderResult(String orderId, String keyId, long amount, String currency, boolean demoMode) {}
