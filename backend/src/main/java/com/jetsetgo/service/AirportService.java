@@ -25,14 +25,16 @@ public class AirportService {
         Query query = new Query();
         List<Criteria> filters = new ArrayList<>();
         if (search != null && !search.isBlank()) {
-            String safePattern = Pattern.quote(search.trim());
-            filters.add(new Criteria().orOperator(
-                    Criteria.where("_id").regex(safePattern, "i"),
-                    Criteria.where("city").regex(safePattern, "i"),
-                    Criteria.where("name").regex(safePattern, "i"),
-                    Criteria.where("stateOrRegion").regex(safePattern, "i"),
-                    Criteria.where("country").regex(safePattern, "i"),
-                    Criteria.where("countryCode").regex(safePattern, "i")));
+            for (String token : search.trim().split("\\s+")) {
+                String safePattern = Pattern.quote(token);
+                filters.add(new Criteria().orOperator(
+                        Criteria.where("_id").regex(safePattern, "i"),
+                        Criteria.where("city").regex(safePattern, "i"),
+                        Criteria.where("name").regex(safePattern, "i"),
+                        Criteria.where("stateOrRegion").regex(safePattern, "i"),
+                        Criteria.where("country").regex(safePattern, "i"),
+                        Criteria.where("countryCode").regex(safePattern, "i")));
+            }
         }
         if (countryCode != null && !countryCode.isBlank()) {
             filters.add(Criteria.where("countryCode").is(countryCode.trim().toUpperCase(Locale.ROOT)));

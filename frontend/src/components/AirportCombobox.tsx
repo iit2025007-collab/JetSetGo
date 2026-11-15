@@ -53,7 +53,7 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
         aria-controls={listId}
         aria-activedescendant={open && results[activeIndex] ? `${listId}-${results[activeIndex].code}` : undefined}
         autoComplete="off"
-        placeholder="City, airport or code"
+        placeholder="City, airport name or IATA code"
         value={selected ? `${selected.city} · ${selected.code}` : query}
         onFocus={() => {
           if (selected) {
@@ -86,7 +86,7 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
       />
       {selected && <small className="airport-picked">{selected.name}</small>}
-      {!selected && !query && <small className="airport-hint">Search city, airport or IATA code</small>}
+      {!selected && !query && <small className="airport-hint">Search by city, airport name, or IATA code</small>}
       {open && (results.length > 0 || loading || error) && (
         <div className="airport-options" id={listId} role="listbox" aria-label={`${label} airport suggestions`}>
           {results.map((airport, index) => (
