@@ -330,7 +330,7 @@ function FlightsPage() {
       </nav>}
       {loading ? <Loading /> : error ? <ErrorNote message={error} /> : visibleFlights.length ? (
         <div className="flight-list">{visibleFlights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery={params.toString()} />)}</div>
-      ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No flights on this route yet"}</h3><p>{flights.length ? "Adjust the airline, time, duration, or fare filters." : "Airport search is independent of flight availability. This route is not represented in the current demo schedule."}</p>{from && to && <Link className="text-link" to={`/flights?${new URLSearchParams({ from, to, date: offsetDate(dateStripStart, 1), mode, countryCode }).toString()}`}>Try the next day <ArrowRight size={16} /></Link>}<Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
+      ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No demo flights for this route and date"}</h3><p>{flights.length ? "Adjust the airline, time, duration, or fare filters." : "Demo schedules are generated for airports with scheduled passenger service, up to 120 days ahead. These are simulated flights, not live airline inventory."}</p>{from && to && <Link className="text-link" to={`/flights?${new URLSearchParams({ from, to, date: offsetDate(dateStripStart, 1), mode, countryCode }).toString()}`}>Try the next day <ArrowRight size={16} /></Link>}<Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
     </section>
   );
 }

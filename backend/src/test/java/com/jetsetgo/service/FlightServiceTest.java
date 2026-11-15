@@ -27,6 +27,7 @@ import com.jetsetgo.repository.FlightRepository;
 class FlightServiceTest {
     @Mock FlightRepository repository;
     @Mock AirportRepository airportRepository;
+    @Mock FlightScheduleGenerator schedules;
     @InjectMocks FlightService service;
 
     @Test
@@ -101,6 +102,29 @@ class FlightServiceTest {
         when(repository.findAll()).thenReturn(List.of(match));
 
         assertEquals(List.of(match), service.search(null, null, null, "departure", null, null, "Airline", null));
+    }
+
+    @Test
+    void createsAndPersistsDemoFlightsForAnUnseededRouteAndDate() {
+        Airport amd = airport("AMD", "IN");
+        Airport hyd = airport("HYD", "IN");
+        java.time.LocalDate date = java.time.LocalDate.now().plusDays(2);
+        Flight generated = new Flight("demo-route-AMD-HYD-" + date + "-1",
+                "JetSetGo Demonstration Air", "JG 1001", "AMD", "Ahmedabad", "HYD", "Hyderabad",
+                date.atTime(8, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
+                date.atTime(10, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
+                new BigDecimal("5000"), "INR", 48, "SCHEDULED", "DEMO",
+                "Asia/Kolkata", "Asia/Kolkata", "Illustrative demo aircraft", null, null, null, false);
+        when(airportRepository.findById("AMD")).thenReturn(Optional.of(amd));
+        when(airportRepository.findById("HYD")).thenReturn(Optional.of(hyd));
+        when(repository.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase("AMD", "HYD"))
+                .thenReturn(List.of());
+        when(schedules.ensureDemoRouteInstances(amd, hyd, date)).thenReturn(List.of(generated));
+
+        List<Flight> results = service.search("AMD", "HYD", date, "departure", "domestic", "IN", null, null);
+
+        assertEquals(List.of(generated), results);
+        org.mockito.Mockito.verify(schedules).ensureDemoRouteInstances(amd, hyd, date);
     }
 
     private static Flight flight(String id, String origin, String destination, String status) {

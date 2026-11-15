@@ -31,6 +31,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
+    if (response.status === 401 && path === "/api/auth/login") {
+      throw new Error("Email or password is incorrect. Check your details and try again.");
+    }
     throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
   }
   const body = await response.text();

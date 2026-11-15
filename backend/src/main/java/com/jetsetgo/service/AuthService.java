@@ -34,7 +34,8 @@ public class AuthService {
     public AuthResult login(String email, String password) {
         AppUser user = users.findByEmailIgnoreCase(email.trim())
                 .filter(account -> passwords.matches(password, account.passwordHash()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                        "Email or password is incorrect. Check your details and try again."));
         return result(user);
     }
 

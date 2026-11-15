@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.math.BigDecimal;
@@ -25,10 +26,12 @@ public class FlightService {
     private static final int SEARCH_RESULT_LIMIT = 40;
     private final FlightRepository flights;
     private final AirportRepository airports;
+    private final FlightScheduleGenerator schedules;
 
-    public FlightService(FlightRepository flights, AirportRepository airports) {
+    public FlightService(FlightRepository flights, AirportRepository airports, FlightScheduleGenerator schedules) {
         this.flights = flights;
         this.airports = airports;
+        this.schedules = schedules;
     }
 
     public List<Flight> search(String origin, String destination, LocalDate date, String sort,
@@ -59,7 +62,22 @@ public class FlightService {
         }
         List<Flight> results;
         if (origin != null && !origin.isBlank() && destination != null && !destination.isBlank()) {
-            results = flights.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase(origin.trim(), destination.trim());
+            List<Flight> routeFlights = new ArrayList<>(flights.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase(
+                    origin.trim(), destination.trim()));
+            ZoneId routeZone = timeZone(originAirport, routeFlights);
+            boolean hasUpcomingFlight = routeFlights.stream()
+                    .filter(flight -> flight.departure().isAfter(Instant.now()))
+                    .filter(flight -> "SCHEDULED".equals(flight.status()))
+                    .filter(flight -> !Boolean.TRUE.equals(flight.templateDisabled()))
+                    .anyMatch(flight -> date == null
+                            || flight.departure().atZone(routeZone).toLocalDate().equals(date));
+            if (!hasUpcomingFlight) {
+                List<Flight> generated = schedules.ensureDemoRouteInstances(originAirport, destinationAirport, date);
+                if (!generated.isEmpty()) {
+                    routeFlights.addAll(generated);
+                }
+            }
+            results = routeFlights;
         } else if ((origin == null || origin.isBlank()) && (destination == null || destination.isBlank())
                 && date == null && (mode == null || mode.isBlank())
                 && (countryCode == null || countryCode.isBlank())

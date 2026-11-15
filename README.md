@@ -8,7 +8,7 @@ Jet Set Go is a full-stack airline booking project built with Java 21 / Spring B
 - A one-time MongoDB import of OurAirports airport, country, and region CSV data, deduplicated/upserted by IATA code. Airport results show region, airport type, and the dataset's scheduled-service flag.
 - Public airport autocomplete with keyboard selection, airport swapping, domestic/international search modes, domestic country selection, and multiple airports per city.
 - One-way and round-trip searches, 1–6 passengers, four demo travel classes, airline/fare filters, seat selection for each traveler and leg, and reverse-route demo flights for the sample itineraries.
-- Twenty-five internal demonstration flight schedules covering the requested India, international, and US domestic routes. Every schedule and booking is clearly identified as demo data, never live inventory/status.
+- Recurring demonstration route schedules across India, international routes, and US domestic routes. When a searched airport pair has no seeded route, the API generates three clearly labelled demo departures for that date and saves them in MongoDB, for dates within the 120-day schedule window.
 - Per-seat atomic reservation in MongoDB, plus an idempotency key and unique index to protect booking creation retries.
 - Passenger details, internal Jet Set Go booking references, pending bookings, customer-scoped booking history, and printable/downloadable demo itineraries.
 - A no-credentials educational payment simulator (no payment details collected) and optional Razorpay Test Mode. Razorpay callbacks are signature-checked and the API confirms captured amount/currency before confirmation.
@@ -17,7 +17,7 @@ Jet Set Go is a full-stack airline booking project built with Java 21 / Spring B
 - Responsive React pages for home, search, flight/seat selection, login/register, checkout, bookings, admin tools, and printable itinerary.
 - GitHub Actions build checks, Docker image for the Java API, and Render/Vercel configuration.
 
-This is a working academic demo, not a production airline reservation platform. It does not connect to a live flight-status/inventory API. All schedules, seats, fares, payments (unless explicitly configured for Razorpay Test Mode), and tickets are simulated. A generated booking reference is internal to Jet Set Go, not a real airline PNR or issued ticket. International demo bookings collect nationality and passport expiry date only; they do not collect passport numbers or validate visa/entry rules.
+This is a working academic demo, not a production airline reservation platform. It does not connect to a live flight-status/inventory API. Recurring and on-demand schedules, seats, fares, payments (unless explicitly configured for Razorpay Test Mode), and tickets are simulated; on-demand schedules are persisted in MongoDB so the selected demo itinerary can be booked. A generated booking reference is internal to Jet Set Go, not a real airline PNR or issued ticket. International demo bookings collect nationality and passport expiry date only; they do not collect passport numbers or validate visa/entry rules.
 
 ## Run locally
 
