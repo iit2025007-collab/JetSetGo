@@ -27,8 +27,10 @@ import com.jetsetgo.repository.RouteTemplateRepository;
 @Service
 public class RollingFlightScheduleGenerator implements FlightScheduleGenerator {
     public static final int WINDOW_DAYS = 120;
+    public static final int DEMO_DEPARTURES_PER_DAY = 6;
     private static final List<LocalTime> DEMO_DEPARTURE_TIMES =
-            List.of(LocalTime.of(8, 0), LocalTime.of(13, 30), LocalTime.of(19, 0));
+            List.of(LocalTime.of(8, 0), LocalTime.of(13, 30), LocalTime.of(19, 0),
+                    LocalTime.of(6, 0), LocalTime.of(15, 0), LocalTime.of(21, 0));
     private final RouteTemplateRepository templates;
     private final MongoTemplate mongo;
 

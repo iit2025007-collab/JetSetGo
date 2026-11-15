@@ -109,21 +109,24 @@ class FlightServiceTest {
         Airport amd = airport("AMD", "IN");
         Airport hyd = airport("HYD", "IN");
         java.time.LocalDate date = java.time.LocalDate.now().plusDays(2);
-        Flight generated = new Flight("demo-route-AMD-HYD-" + date + "-1",
-                "JetSetGo Demonstration Air", "JG 1001", "AMD", "Ahmedabad", "HYD", "Hyderabad",
-                date.atTime(8, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
-                date.atTime(10, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
-                new BigDecimal("5000"), "INR", 48, "SCHEDULED", "DEMO",
-                "Asia/Kolkata", "Asia/Kolkata", "Illustrative demo aircraft", null, null, null, false);
+        List<Flight> generated = IntStream.range(0, RollingFlightScheduleGenerator.DEMO_DEPARTURES_PER_DAY)
+                .mapToObj(index -> new Flight("demo-route-AMD-HYD-" + date + "-" + (index + 1),
+                        "JetSetGo Demonstration Air", "JG " + (1001 + index), "AMD", "Ahmedabad", "HYD", "Hyderabad",
+                        date.atTime(8 + index * 2, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
+                        date.atTime(10 + index * 2, 0).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant(),
+                        new BigDecimal("5000"), "INR", 48, "SCHEDULED", "DEMO",
+                        "Asia/Kolkata", "Asia/Kolkata", "Illustrative demo aircraft", null, null, null, false))
+                .toList();
+        List<Flight> existing = generated.subList(0, 3);
         when(airportRepository.findById("AMD")).thenReturn(Optional.of(amd));
         when(airportRepository.findById("HYD")).thenReturn(Optional.of(hyd));
         when(repository.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase("AMD", "HYD"))
-                .thenReturn(List.of());
-        when(schedules.ensureDemoRouteInstances(amd, hyd, date)).thenReturn(List.of(generated));
+                .thenReturn(existing).thenReturn(generated);
+        when(schedules.ensureDemoRouteInstances(amd, hyd, date)).thenReturn(generated);
 
         List<Flight> results = service.search("AMD", "HYD", date, "departure", "domestic", "IN", null, null);
 
-        assertEquals(List.of(generated), results);
+        assertEquals(generated, results);
         org.mockito.Mockito.verify(schedules).ensureDemoRouteInstances(amd, hyd, date);
     }
 

@@ -65,16 +65,18 @@ public class FlightService {
             List<Flight> routeFlights = new ArrayList<>(flights.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase(
                     origin.trim(), destination.trim()));
             ZoneId routeZone = timeZone(originAirport, routeFlights);
-            boolean hasUpcomingFlight = routeFlights.stream()
+            LocalDate scheduleDate = date == null ? LocalDate.now(routeZone) : date;
+            long upcomingFlightsOnDate = routeFlights.stream()
                     .filter(flight -> flight.departure().isAfter(Instant.now()))
                     .filter(flight -> "SCHEDULED".equals(flight.status()))
                     .filter(flight -> !Boolean.TRUE.equals(flight.templateDisabled()))
-                    .anyMatch(flight -> date == null
-                            || flight.departure().atZone(routeZone).toLocalDate().equals(date));
-            if (!hasUpcomingFlight) {
+                    .filter(flight -> flight.departure().atZone(routeZone).toLocalDate().equals(scheduleDate))
+                    .count();
+            if (upcomingFlightsOnDate < RollingFlightScheduleGenerator.DEMO_DEPARTURES_PER_DAY) {
                 List<Flight> generated = schedules.ensureDemoRouteInstances(originAirport, destinationAirport, date);
                 if (!generated.isEmpty()) {
-                    routeFlights.addAll(generated);
+                    routeFlights = new ArrayList<>(flights.findByOriginCodeIgnoreCaseAndDestinationCodeIgnoreCase(
+                            origin.trim(), destination.trim()));
                 }
             }
             results = routeFlights;

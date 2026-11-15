@@ -62,14 +62,15 @@ class RollingFlightScheduleGeneratorTest {
 
         List<Flight> generated = generator.ensureDemoRouteInstances(amd, hyd, date);
 
-        assertEquals(3, generated.size());
+        assertEquals(RollingFlightScheduleGenerator.DEMO_DEPARTURES_PER_DAY, generated.size());
         assertEquals("AMD", generated.getFirst().originCode());
         assertEquals("HYD", generated.getFirst().destinationCode());
         assertTrue(generated.stream().allMatch(flight -> flight.dataSource().equals("DEMO")));
         assertTrue(generated.stream().allMatch(flight -> flight.status().equals("SCHEDULED")));
         assertTrue(generated.stream().allMatch(flight -> flight.departure().isBefore(flight.arrival())));
         assertTrue(generated.stream().allMatch(flight -> flight.originTimeZone().equals("Asia/Kolkata")));
-        org.mockito.Mockito.verify(writes, org.mockito.Mockito.times(3))
+        org.mockito.Mockito.verify(writes, org.mockito.Mockito.times(
+                RollingFlightScheduleGenerator.DEMO_DEPARTURES_PER_DAY))
                 .upsert(org.mockito.ArgumentMatchers.any(Query.class), org.mockito.ArgumentMatchers.any(Update.class));
         org.mockito.Mockito.verify(writes).execute();
     }

@@ -8,7 +8,7 @@ Jet Set Go is a full-stack airline booking project built with Java 21 / Spring B
 - A one-time MongoDB import of OurAirports airport, country, and region CSV data, deduplicated/upserted by IATA code. Airport results show region, airport type, and the dataset's scheduled-service flag.
 - Public airport autocomplete with keyboard selection, airport swapping, domestic/international search modes, domestic country selection, and multiple airports per city.
 - One-way and round-trip searches, 1–6 passengers, four demo travel classes, airline/fare filters, seat selection for each traveler and leg, and reverse-route demo flights for the sample itineraries.
-- Recurring demonstration route schedules across India, international routes, and US domestic routes. When a searched airport pair has no seeded route, the API generates three clearly labelled demo departures for that date and saves them in MongoDB, for dates within the 120-day schedule window.
+- Recurring demonstration route schedules across India, international routes, and US domestic routes. When a searched airport pair has fewer than six scheduled departures, the API ensures six clearly labelled demo departures for that date and saves them in MongoDB, for dates within the 120-day schedule window.
 - Per-seat atomic reservation in MongoDB, plus an idempotency key and unique index to protect booking creation retries.
 - Passenger details, internal Jet Set Go booking references, pending bookings, customer-scoped booking history, and printable/downloadable demo itineraries.
 - A no-credentials educational payment simulator (no payment details collected) and optional Razorpay Test Mode. Razorpay callbacks are signature-checked and the API confirms captured amount/currency before confirmation.
