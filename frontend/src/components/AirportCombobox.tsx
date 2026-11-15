@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from "react";
-import { MapPin } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { MapPin, X } from "lucide-react";
 import { api } from "../api";
 import type { Airport } from "../types";
 
@@ -13,29 +13,48 @@ type Props = {
 
 export default function AirportCombobox({ label, selected, countryCode, excludeCode, onChange }: Props) {
   const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [requestVersion, setRequestVersion] = useState(0);
   const [results, setResults] = useState<Airport[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!open) return;
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError("");
     setResults([]);
-    const timeout = window.setTimeout(() => {
-      api.airports(query, countryCode).then((items) => {
+    setActiveIndex(-1);
+    const requestTimeout = window.setTimeout(() => {
+      controller.abort();
+      if (active) {
+        setLoading(false);
+        setError("Airport search timed out. Check your connection and try again.");
+      }
+    }, 8000);
+    const debounce = window.setTimeout(() => {
+      api.airports(query, countryCode, controller.signal).then((items) => {
         if (active) { setResults(items.filter((airport) => airport.code !== excludeCode)); setError(""); }
-      }).catch((failure: Error) => {
-        if (active) setError(failure.message);
+      }).catch(() => {
+        if (active && !controller.signal.aborted) {
+          setError("Airport search is unavailable. Check your connection and try again.");
+        }
       }).finally(() => {
-        if (active) setLoading(false);
+        window.clearTimeout(requestTimeout);
+        if (active && !controller.signal.aborted) setLoading(false);
       });
-    }, 140);
-    return () => { active = false; window.clearTimeout(timeout); };
-  }, [countryCode, excludeCode, open, query]);
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(debounce);
+      window.clearTimeout(requestTimeout);
+      controller.abort();
+    };
+  }, [countryCode, excludeCode, open, query, requestVersion]);
 
   function choose(airport: Airport) {
     onChange(airport);
@@ -48,20 +67,19 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
     <div className="search-field airport-combobox">
       <span>{label}</span>
       <input
+        ref={inputRef}
         role="combobox"
         aria-label={`${label} airport`}
         aria-autocomplete="list"
         aria-expanded={open}
+        aria-busy={loading}
         aria-controls={listId}
         aria-activedescendant={open && results[activeIndex] ? `${listId}-${results[activeIndex].code}` : undefined}
         autoComplete="off"
-        placeholder="City, airport name or IATA code"
+        placeholder="Type a city, airport or IATA code"
         value={selected ? `${selected.city} · ${selected.code}` : query}
-        onFocus={() => {
-          if (selected) {
-            onChange(null);
-            setQuery("");
-          }
+        onFocus={(event) => {
+          if (selected) event.currentTarget.select();
           setOpen(true);
         }}
         onChange={(event) => {
@@ -87,6 +105,22 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
         }}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
       />
+      {selected && (
+        <button
+          type="button"
+          className="airport-clear"
+          aria-label={`Clear ${label.toLowerCase()} airport`}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onChange(null);
+            setQuery("");
+            setOpen(true);
+            inputRef.current?.focus();
+          }}
+        >
+          <X size={14} />
+        </button>
+      )}
       {selected && <small className="airport-picked">{selected.name}</small>}
       {!selected && !query && <small className="airport-hint">Search by city, airport name, or IATA code</small>}
       {open && (
@@ -118,7 +152,19 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
           ))}
           {loading && <div className="airport-message" role="status">Searching airports…</div>}
           {!loading && !error && results.length === 0 && <div className="airport-message" role="status">No matching airports.</div>}
-          {error && <div className="airport-message airport-error" role="status">Airport search is unavailable. Check your connection.</div>}
+          {error && (
+            <div className="airport-message airport-error" role="status">
+              <span>{error}</span>
+              <button
+                type="button"
+                className="airport-retry"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setRequestVersion((version) => version + 1)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

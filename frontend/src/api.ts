@@ -41,11 +41,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  airports: (query = "", countryCode?: string) => {
+  airports: (query = "", countryCode?: string, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
     if (countryCode) params.set("countryCode", countryCode);
-    return request<Airport[]>(`/api/airports?${params}`);
+    return request<Airport[]>(`/api/airports?${params}`, { signal });
   },
   airportCountries: () => request<string[]>("/api/airports/countries"),
   flights: (from?: string, to?: string, date?: string, sort = "departure", mode?: string, countryCode?: string) => {

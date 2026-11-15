@@ -44,6 +44,9 @@
 .airport-combobox{z-index:2}
 .airport-combobox:focus-within{z-index:8}
 .airport-combobox input{min-width:0}
+.airport-combobox input{padding-right:24px}
+.airport-clear{position:absolute;right:9px;top:27px;width:23px;height:23px;display:grid;place-items:center;border:0;border-radius:50%;background:#eef2ef;color:#627a76}
+.airport-clear:hover{background:#e2ebe6;color:#294f4a}
 .airport-combobox .airport-picked,.airport-combobox .airport-hint{position:static;display:block;min-height:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;color:#899699}
 .airport-options{position:absolute;z-index:12;top:calc(100% + 7px);left:0;right:0;min-width:280px;max-height:300px;overflow:auto;background:#fff;border:1px solid #e1e7e3;border-radius:4px;box-shadow:0 16px 38px rgba(13,35,48,.18);padding:5px}
 .airport-option{width:100%;display:flex;align-items:center;gap:10px;padding:10px 9px;border:0;border-radius:3px;background:#fff;text-align:left;color:#294358}
@@ -85,6 +88,8 @@
 @media(max-width:760px){.search-form{grid-template-columns:minmax(0,1fr) 29px minmax(0,1fr)}.search-date{grid-column:1/-1}.search-submit{grid-column:1/-1}.airport-options{min-width:250px}.search-label i{display:none}.destination-heading{display:block}.destination-heading>p{margin-top:13px}.destination-heading h2{font-size:32px}.destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.flight-tools{align-items:flex-start;flex-direction:column}.sort-control{justify-content:space-between;width:100%}.sort-control select{max-width:none;flex:1}}
 @media(max-width:420px){.destination-grid{grid-template-columns:1fr 1fr;gap:8px}.destination-card{min-height:180px;padding:13px}.destination-copy b{font-size:22px}.destination-copy>span{font-size:8px}.flight-tools{width:100%}.page-heading-row{flex-wrap:wrap}.page-heading-row>div:first-child{width:100%}}
 .airport-message{padding:10px;color:#7a888b;font-size:9px}
+.airport-error{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.airport-retry{flex:none;padding:3px;border:0;background:transparent;color:#4e736c;font-size:9px;font-weight:700;text-decoration:underline}
 .airport-error{color:#98513f}
 .demo-payment-notice{display:flex;align-items:flex-start;gap:11px;background:#eff4ef;border:1px solid #dfe9e1;padding:13px;color:#40675d}
 .demo-payment-notice>svg{flex:none;margin-top:1px}
