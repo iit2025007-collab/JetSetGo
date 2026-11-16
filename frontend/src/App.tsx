@@ -358,6 +358,7 @@ function FlightPage({ session }: { session: Session | null }) {
   const countryCode = searchParams.get("countryCode") ?? "";
   const returnDate = searchParams.get("returnDate") ?? "";
   const [flight, setFlight] = useState<Flight | null>(null);
+  const [isInternationalRoute, setIsInternationalRoute] = useState(mode === "international");
   const [seats, setSeats] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [returnFlights, setReturnFlights] = useState<Flight[]>([]);
@@ -377,14 +378,29 @@ function FlightPage({ session }: { session: Session | null }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setIsInternationalRoute(mode === "international");
     Promise.all([api.flight(id), api.seats(id, travelClass)])
       .then(async ([nextFlight, nextSeats]) => {
+        const [originAirports, destinationAirports] = await Promise.all([
+          api.airports(nextFlight.originCode),
+          api.airports(nextFlight.destinationCode),
+        ]);
+        const originCountryCode = originAirports.find((airport) => airport.code === nextFlight.originCode)?.countryCode;
+        const destinationCountryCode = destinationAirports.find((airport) => airport.code === nextFlight.destinationCode)?.countryCode;
+        const hasCountryData = Boolean(originCountryCode && destinationCountryCode);
+        const routeIsInternational = hasCountryData
+          ? originCountryCode !== destinationCountryCode
+          : mode === "international";
+        const routeMode = hasCountryData ? routeIsInternational ? "international" : "domestic" : mode;
+        const domesticCountryCode = originCountryCode || countryCode || undefined;
         const nextReturnFlights = roundTrip && returnDate
           ? await api.flights(nextFlight.destinationCode, nextFlight.originCode, returnDate,
-              "departure", mode || undefined, mode === "domestic" ? countryCode : undefined)
+              "departure", routeMode || undefined,
+              routeMode === "domestic" ? domesticCountryCode : undefined)
           : [];
         if (!active) return;
         setFlight(nextFlight);
+        setIsInternationalRoute(routeIsInternational);
         setSeats(nextSeats);
         setReturnFlights(nextReturnFlights);
         setReturnFlight(null);
@@ -488,13 +504,13 @@ function FlightPage({ session }: { session: Session | null }) {
         </div>
         <aside className="booking-side"><div className="side-heading"><span className="eyebrow muted">PASSENGER DETAILS</span><h2>Almost there.</h2><p>Demo booking for {passengerCount} passenger{passengerCount === 1 ? "" : "s"} · {travelClass.replace("_", " ").toLowerCase()}.</p></div><form onSubmit={submit} className="stack-form">
           {passengers.map((passenger, index) => <fieldset className="passenger-fields" key={index}><legend>Passenger {index + 1}</legend><label>Full name<input required maxLength={100} value={passenger.name} onChange={(event) => updatePassenger(index, "name", event.target.value)} placeholder="As shown on travel ID" /></label>
-            {mode === "international" && <><label>Nationality (2-letter country code)<input required maxLength={2} pattern="[A-Za-z]{2}" value={passenger.nationality} onChange={(event) => updatePassenger(index, "nationality", event.target.value.toUpperCase())} placeholder="IN" /></label><label>Passport expiry date<input required type="date" min={localDateInput(1)} value={passenger.passportExpiryDate} onChange={(event) => updatePassenger(index, "passportExpiryDate", event.target.value)} /></label></>}
+            {isInternationalRoute && <><label>Nationality (2-letter country code)<input required maxLength={2} pattern="[A-Za-z]{2}" value={passenger.nationality} onChange={(event) => updatePassenger(index, "nationality", event.target.value.toUpperCase())} placeholder="IN" /></label><label>Passport expiry date<input required type="date" min={localDateInput(1)} value={passenger.passportExpiryDate} onChange={(event) => updatePassenger(index, "passportExpiryDate", event.target.value)} /></label></>}
           </fieldset>)}
           <label>Contact email<input required type="email" maxLength={254} value={email} onChange={(e) => { setEmail(e.target.value); setIdempotencyKey(crypto.randomUUID()); }} placeholder="you@example.com" /></label>
-          {mode === "international" && <p className="form-hint">Demo only: passport number is not collected. Check official entry requirements before travel.</p>}
+          {isInternationalRoute && <p className="form-hint">Demo only: passport number is not collected. Check official entry requirements before travel.</p>}
           {error && <ErrorNote message={error} />}{!session && <p className="form-hint">You’ll sign in before creating your booking.</p>}
           <div className="fare-summary"><span>Outbound / passenger · all-inclusive demo fare</span><b>{money(flight.price, flight.currency)}</b>{returnFlight && <><span>Return / passenger · all-inclusive demo fare</span><b>{money(returnFlight.price, returnFlight.currency)}</b></>}<span>Passengers · {travelClass.replace("_", " ")}</span><b>{passengerCount} · ×{classMultiplier}</b><span>Selected outbound seats</span><b>{selectedSeats.length ? selectedSeats.join(", ") : "not selected"}</b>{returnFlight && <><span>Selected return seats</span><b>{selectedReturnSeats.length ? selectedReturnSeats.join(", ") : "not selected"}</b></>}<span>Estimated total · demo fare</span><b>{money(estimatedTotal, flight.currency)}</b></div>
-          <button className="primary-button full" disabled={busy || flight.status !== "SCHEDULED"}>{busy ? "Creating booking…" : <>Continue to payment <ArrowRight size={17} /></>}</button><p className="safe-note"><LockKeyhole size={13} /> {mode === "international" ? "Demo itinerary · no airline ticket issued" : "Demo checkout · no airline inventory"}</p></form></aside>
+          <button className="primary-button full" disabled={busy || flight.status !== "SCHEDULED"}>{busy ? "Creating booking…" : <>Continue to payment <ArrowRight size={17} /></>}</button><p className="safe-note"><LockKeyhole size={13} /> {isInternationalRoute ? "Demo itinerary · no airline ticket issued" : "Demo checkout · no airline inventory"}</p></form></aside>
       </div>
     </section>
   );
