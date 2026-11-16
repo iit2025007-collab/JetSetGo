@@ -462,7 +462,7 @@ function FlightPage({ session }: { session: Session | null }) {
         returnSeatNumbers: selectedReturnSeats,
         passengers: passengers.map((passenger) => ({
           name: passenger.name,
-          ...(mode === "international" ? {
+          ...(isInternationalRoute ? {
             nationality: passenger.nationality,
             passportExpiryDate: passenger.passportExpiryDate,
           } : {}),
