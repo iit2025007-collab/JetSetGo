@@ -20,37 +20,47 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
   const [requestVersion, setRequestVersion] = useState(0);
   const [results, setResults] = useState<Airport[]>([]);
   const [loading, setLoading] = useState(false);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!open) return;
     let active = true;
     const controller = new AbortController();
     setLoading(true);
+    setWarming(false);
     setError("");
     setResults([]);
     setActiveIndex(-1);
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     const requestTimeout = window.setTimeout(() => {
       controller.abort();
       if (active) {
         setLoading(false);
-        setError("Airport search timed out. Check your connection and try again.");
+        setError("Airport search timed out while connecting to the flight service. Please retry.");
       }
-    }, 8000);
+    }, 90_000);
     const debounce = window.setTimeout(() => {
       api.airports(query, countryCode, controller.signal).then((items) => {
         if (active) { setResults(items.filter((airport) => airport.code !== excludeCode)); setError(""); }
-      }).catch(() => {
+      }).catch((failure: Error) => {
         if (active && !controller.signal.aborted) {
-          setError("Airport search is unavailable. Check your connection and try again.");
+          setError(failure.message || "Airport search is unavailable. Check your connection and try again.");
         }
       }).finally(() => {
+        window.clearTimeout(warmingTimeout);
         window.clearTimeout(requestTimeout);
-        if (active && !controller.signal.aborted) setLoading(false);
+        if (active && !controller.signal.aborted) {
+          setLoading(false);
+          setWarming(false);
+        }
       });
     }, 250);
     return () => {
       active = false;
       window.clearTimeout(debounce);
+      window.clearTimeout(warmingTimeout);
       window.clearTimeout(requestTimeout);
       controller.abort();
     };
@@ -150,7 +160,9 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
               <strong>{airport.code}</strong>
             </button>
           ))}
-          {loading && <div className="airport-message" role="status">Searching airports…</div>}
+          {loading && <div className="airport-message" role="status">
+            {warming ? "Waking the flight service; this may take a moment…" : "Searching airports…"}
+          </div>}
           {!loading && !error && results.length === 0 && <div className="airport-message" role="status">No matching airports.</div>}
           {error && (
             <div className="airport-message airport-error" role="status">

@@ -237,16 +237,33 @@ function HomePage() {
 function DemoFlightsSection() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
+  const [requestVersion, setRequestVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setWarming(false);
+    setError("");
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     api.featuredFlights()
       .then((items) => { if (active) setFlights(items); })
       .catch((failure: Error) => { if (active) setError(failure.message); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
+      .finally(() => {
+        window.clearTimeout(warmingTimeout);
+        if (active) {
+          setLoading(false);
+          setWarming(false);
+        }
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(warmingTimeout);
+    };
+  }, [requestVersion]);
 
   return (
     <section className="demo-flights-section">
@@ -258,7 +275,16 @@ function DemoFlightsSection() {
         <Link to="/flights" className="text-link">Browse demo flights <ArrowRight size={16} /></Link>
       </div>
       <p className="demo-flights-note">These simulated flights and fares are for demonstration only. No real airline inventory is sold.</p>
-      {loading ? <Loading /> : error ? <ErrorNote message={error} /> : flights.length ? (
+      {loading ? <div className="loading-state" role="status"><span className="spinner" />
+        {warming ? "Waking the flight service; this may take a moment…" : "Loading demo flights…"}
+      </div> : error ? (
+        <div className="demo-flights-empty" role="alert">
+          {error}{" "}
+          <button type="button" className="airport-retry" onClick={() => setRequestVersion((version) => version + 1)}>
+            Retry
+          </button>
+        </div>
+      ) : flights.length ? (
         <div className="flight-list">
           {flights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery="" />)}
         </div>
@@ -276,7 +302,9 @@ function FlightsPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [airlines, setAirlines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
+  const [requestVersion, setRequestVersion] = useState(0);
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const date = params.get("date") ?? "";
@@ -292,14 +320,33 @@ function FlightsPage() {
   const timeWindow = params.get("timeWindow") ?? "";
   const maxDuration = params.get("maxDuration") ?? "";
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setWarming(false);
+    setError("");
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     api.flights(from, to, date, sort, mode, countryCode)
       .then((items) => {
-        setFlights(items);
-        setAirlines([...new Set(items.map((flight) => flight.airline))].sort());
-        setError("");
-      }).catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
-  }, [from, to, date, sort, mode, countryCode]);
+        if (active) {
+          setFlights(items);
+          setAirlines([...new Set(items.map((flight) => flight.airline))].sort());
+        }
+      }).catch((e: Error) => {
+        if (active) setError(e.message);
+      }).finally(() => {
+        window.clearTimeout(warmingTimeout);
+        if (active) {
+          setLoading(false);
+          setWarming(false);
+        }
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(warmingTimeout);
+    };
+  }, [from, to, date, sort, mode, countryCode, requestVersion]);
   const visibleFlights = flights.filter((flight) =>
     (!airline || flight.airline === airline)
     && (!maxPrice || flight.price <= Number(maxPrice))
@@ -328,7 +375,16 @@ function FlightsPage() {
           </Link>;
         })}
       </nav>}
-      {loading ? <Loading /> : error ? <ErrorNote message={error} /> : visibleFlights.length ? (
+      {loading ? <div className="loading-state" role="status"><span className="spinner" />
+        {warming ? "Waking the flight service; this may take a moment…" : "Finding your way…"}
+      </div> : error ? (
+        <div className="demo-flights-empty" role="alert">
+          {error}{" "}
+          <button type="button" className="airport-retry" onClick={() => setRequestVersion((version) => version + 1)}>
+            Retry
+          </button>
+        </div>
+      ) : visibleFlights.length ? (
         <div className="flight-list">{visibleFlights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery={params.toString()} />)}</div>
       ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No demo flights for this route and date"}</h3><p>{flights.length ? "Adjust the airline, time, duration, or fare filters." : "Demo schedules are generated for airports with scheduled passenger service, up to 120 days ahead. These are simulated flights, not live airline inventory."}</p>{from && to && <Link className="text-link" to={`/flights?${new URLSearchParams({ from, to, date: offsetDate(dateStripStart, 1), mode, countryCode }).toString()}`}>Try the next day <ArrowRight size={16} /></Link>}<Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
     </section>

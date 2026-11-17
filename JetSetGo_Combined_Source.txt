@@ -5218,16 +5218,33 @@ function HomePage() {
 function DemoFlightsSection() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
+  const [requestVersion, setRequestVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setWarming(false);
+    setError("");
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     api.featuredFlights()
       .then((items) => { if (active) setFlights(items); })
       .catch((failure: Error) => { if (active) setError(failure.message); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
+      .finally(() => {
+        window.clearTimeout(warmingTimeout);
+        if (active) {
+          setLoading(false);
+          setWarming(false);
+        }
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(warmingTimeout);
+    };
+  }, [requestVersion]);
 
   return (
     <section className="demo-flights-section">
@@ -5239,7 +5256,16 @@ function DemoFlightsSection() {
         <Link to="/flights" className="text-link">Browse demo flights <ArrowRight size={16} /></Link>
       </div>
       <p className="demo-flights-note">These simulated flights and fares are for demonstration only. No real airline inventory is sold.</p>
-      {loading ? <Loading /> : error ? <ErrorNote message={error} /> : flights.length ? (
+      {loading ? <div className="loading-state" role="status"><span className="spinner" />
+        {warming ? "Waking the flight service; this may take a moment…" : "Loading demo flights…"}
+      </div> : error ? (
+        <div className="demo-flights-empty" role="alert">
+          {error}{" "}
+          <button type="button" className="airport-retry" onClick={() => setRequestVersion((version) => version + 1)}>
+            Retry
+          </button>
+        </div>
+      ) : flights.length ? (
         <div className="flight-list">
           {flights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery="" />)}
         </div>
@@ -5257,7 +5283,9 @@ function FlightsPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [airlines, setAirlines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
+  const [requestVersion, setRequestVersion] = useState(0);
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const date = params.get("date") ?? "";
@@ -5273,14 +5301,33 @@ function FlightsPage() {
   const timeWindow = params.get("timeWindow") ?? "";
   const maxDuration = params.get("maxDuration") ?? "";
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setWarming(false);
+    setError("");
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     api.flights(from, to, date, sort, mode, countryCode)
       .then((items) => {
-        setFlights(items);
-        setAirlines([...new Set(items.map((flight) => flight.airline))].sort());
-        setError("");
-      }).catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
-  }, [from, to, date, sort, mode, countryCode]);
+        if (active) {
+          setFlights(items);
+          setAirlines([...new Set(items.map((flight) => flight.airline))].sort());
+        }
+      }).catch((e: Error) => {
+        if (active) setError(e.message);
+      }).finally(() => {
+        window.clearTimeout(warmingTimeout);
+        if (active) {
+          setLoading(false);
+          setWarming(false);
+        }
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(warmingTimeout);
+    };
+  }, [from, to, date, sort, mode, countryCode, requestVersion]);
   const visibleFlights = flights.filter((flight) =>
     (!airline || flight.airline === airline)
     && (!maxPrice || flight.price <= Number(maxPrice))
@@ -5309,7 +5356,16 @@ function FlightsPage() {
           </Link>;
         })}
       </nav>}
-      {loading ? <Loading /> : error ? <ErrorNote message={error} /> : visibleFlights.length ? (
+      {loading ? <div className="loading-state" role="status"><span className="spinner" />
+        {warming ? "Waking the flight service; this may take a moment…" : "Finding your way…"}
+      </div> : error ? (
+        <div className="demo-flights-empty" role="alert">
+          {error}{" "}
+          <button type="button" className="airport-retry" onClick={() => setRequestVersion((version) => version + 1)}>
+            Retry
+          </button>
+        </div>
+      ) : visibleFlights.length ? (
         <div className="flight-list">{visibleFlights.map((flight) => <FlightCard key={flight.id} flight={flight} searchQuery={params.toString()} />)}</div>
       ) : <div className="empty-state"><Plane size={30} /><h3>{flights.length ? "No flights match these filters" : "No demo flights for this route and date"}</h3><p>{flights.length ? "Adjust the airline, time, duration, or fare filters." : "Demo schedules are generated for airports with scheduled passenger service, up to 120 days ahead. These are simulated flights, not live airline inventory."}</p>{from && to && <Link className="text-link" to={`/flights?${new URLSearchParams({ from, to, date: offsetDate(dateStripStart, 1), mode, countryCode }).toString()}`}>Try the next day <ArrowRight size={16} /></Link>}<Link to="/" className="primary-button">Edit search <ArrowRight size={16} /></Link></div>}
     </section>
@@ -5925,6 +5981,7 @@ import type { AdminSummary, Airport, Booking, DemoPaymentResult, Flight, Order, 
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 const SESSION_KEY = "jetsetgo-session";
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export function getSession(): Session | null {
   const raw = localStorage.getItem(SESSION_KEY);
@@ -5944,23 +6001,38 @@ export function saveSession(session: Session | null) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = getSession();
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
-      ...init.headers,
-    },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    if (response.status === 401 && path === "/api/auth/login") {
-      throw new Error("Email or password is incorrect. Check your details and try again.");
+  const controller = init.signal ? undefined : new AbortController();
+  const timeout = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : undefined;
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal: init.signal ?? controller?.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+        ...init.headers,
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      if (response.status === 401 && path === "/api/auth/login") {
+        throw new Error("Email or password is incorrect. Check your details and try again.");
+      }
+      throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
     }
-    throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
+    const body = await response.text();
+    return (body ? JSON.parse(body) : undefined) as T;
+  } catch (failure) {
+    if (controller?.signal.aborted) {
+      throw new Error("The flight service took too long to respond. It may be waking after idle time; please retry.");
+    }
+    if (failure instanceof TypeError) {
+      throw new Error("The flight service is unreachable. It may be starting up; please retry.");
+    }
+    throw failure;
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
   }
-  const body = await response.text();
-  return (body ? JSON.parse(body) : undefined) as T;
 }
 
 export const api = {
@@ -6072,37 +6144,47 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
   const [requestVersion, setRequestVersion] = useState(0);
   const [results, setResults] = useState<Airport[]>([]);
   const [loading, setLoading] = useState(false);
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!open) return;
     let active = true;
     const controller = new AbortController();
     setLoading(true);
+    setWarming(false);
     setError("");
     setResults([]);
     setActiveIndex(-1);
+    const warmingTimeout = window.setTimeout(() => {
+      if (active) setWarming(true);
+    }, 2500);
     const requestTimeout = window.setTimeout(() => {
       controller.abort();
       if (active) {
         setLoading(false);
-        setError("Airport search timed out. Check your connection and try again.");
+        setError("Airport search timed out while connecting to the flight service. Please retry.");
       }
-    }, 8000);
+    }, 90_000);
     const debounce = window.setTimeout(() => {
       api.airports(query, countryCode, controller.signal).then((items) => {
         if (active) { setResults(items.filter((airport) => airport.code !== excludeCode)); setError(""); }
-      }).catch(() => {
+      }).catch((failure: Error) => {
         if (active && !controller.signal.aborted) {
-          setError("Airport search is unavailable. Check your connection and try again.");
+          setError(failure.message || "Airport search is unavailable. Check your connection and try again.");
         }
       }).finally(() => {
+        window.clearTimeout(warmingTimeout);
         window.clearTimeout(requestTimeout);
-        if (active && !controller.signal.aborted) setLoading(false);
+        if (active && !controller.signal.aborted) {
+          setLoading(false);
+          setWarming(false);
+        }
       });
     }, 250);
     return () => {
       active = false;
       window.clearTimeout(debounce);
+      window.clearTimeout(warmingTimeout);
       window.clearTimeout(requestTimeout);
       controller.abort();
     };
@@ -6202,7 +6284,9 @@ export default function AirportCombobox({ label, selected, countryCode, excludeC
               <strong>{airport.code}</strong>
             </button>
           ))}
-          {loading && <div className="airport-message" role="status">Searching airports…</div>}
+          {loading && <div className="airport-message" role="status">
+            {warming ? "Waking the flight service; this may take a moment…" : "Searching airports…"}
+          </div>}
           {!loading && !error && results.length === 0 && <div className="airport-message" role="status">No matching airports.</div>}
           {error && (
             <div className="airport-message airport-error" role="status">

@@ -2,6 +2,7 @@ import type { AdminSummary, Airport, Booking, DemoPaymentResult, Flight, Order, 
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 const SESSION_KEY = "jetsetgo-session";
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export function getSession(): Session | null {
   const raw = localStorage.getItem(SESSION_KEY);
@@ -21,23 +22,38 @@ export function saveSession(session: Session | null) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = getSession();
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
-      ...init.headers,
-    },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    if (response.status === 401 && path === "/api/auth/login") {
-      throw new Error("Email or password is incorrect. Check your details and try again.");
+  const controller = init.signal ? undefined : new AbortController();
+  const timeout = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : undefined;
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal: init.signal ?? controller?.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+        ...init.headers,
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      if (response.status === 401 && path === "/api/auth/login") {
+        throw new Error("Email or password is incorrect. Check your details and try again.");
+      }
+      throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
     }
-    throw new Error(body?.detail ?? body?.message ?? `Request failed (${response.status})`);
+    const body = await response.text();
+    return (body ? JSON.parse(body) : undefined) as T;
+  } catch (failure) {
+    if (controller?.signal.aborted) {
+      throw new Error("The flight service took too long to respond. It may be waking after idle time; please retry.");
+    }
+    if (failure instanceof TypeError) {
+      throw new Error("The flight service is unreachable. It may be starting up; please retry.");
+    }
+    throw failure;
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
   }
-  const body = await response.text();
-  return (body ? JSON.parse(body) : undefined) as T;
 }
 
 export const api = {
